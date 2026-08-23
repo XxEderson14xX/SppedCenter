@@ -314,6 +314,7 @@
       </div>
 
       <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" id="btn-pdf-cotizacion">Descargar PDF</button>
         <button type="button" class="btn secundario" data-cerrar-modal="modal-cotizacion">Cerrar</button>
         <button type="button" class="btn" id="btn-guardar-cotizacion">Guardar cotización</button>
       </div>
@@ -356,7 +357,33 @@
   </div>
 </div>
 
+<!-- Modal grande: historial por placa -->
+<div class="modal-fondo" id="modal-historial">
+  <div class="modal" style="max-width:820px;">
+    <button class="cerrar" data-cerrar-modal="modal-historial">×</button>
+    <h3 id="titulo-historial">Historial del vehículo</h3>
+    <p id="subtitulo-historial" style="color:var(--text-mute); font-size:13px; margin-top:-8px;"></p>
+
+    <div class="kpis" id="kpis-historial" style="margin-bottom:16px;">
+      <div class="kpi"><div class="valor">—</div><div class="etiqueta">Visitas totales</div></div>
+      <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">Total facturado histórico</div></div>
+      <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Saldo pendiente acumulado</div></div>
+    </div>
+
+    <h3>Cotizaciones</h3>
+    <table class="tabla">
+      <thead><tr><th>Folio</th><th>Fecha</th><th>Km</th><th>Total</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-historial-cotizaciones"></tbody>
+    </table>
+
+    <h3 style="margin-top:18px;">Línea de tiempo (todas las visitas)</h3>
+    <ul class="linea-tiempo" id="lista-historial-seguimiento"></ul>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/app.js"></script>
 </body>
