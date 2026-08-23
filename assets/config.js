@@ -9,5 +9,5 @@
 //    NUNCA pongas aquí la "service_role" key).
 // ============================================================================
 
-const SUPABASE_URL = "https://cawevglxeaogyokpxovo.supabase.co/rest/v1/";
+const SUPABASE_URL = "https://cawevglxeaogyokpxovo.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_PAICA-lvCrKwEbwf9JXVxA_zeMphYJf";
