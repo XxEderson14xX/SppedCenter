@@ -45,6 +45,8 @@ async function registrarBitacora(tabla, registroId, accion, anteriores, nuevos) 
 }
 function abrirModal(id) { el(id).classList.add("activo"); }
 function cerrarModal(id) { el(id).classList.remove("activo"); }
+function puedeEscribir() { return !!(estado.perfil && estado.perfil.rol !== "consulta"); }
+function esAdmin() { return !!(estado.perfil && estado.perfil.rol === "administrador"); }
 document.querySelectorAll("[data-cerrar-modal]").forEach(b => {
   b.addEventListener("click", () => cerrarModal(b.dataset.cerrarModal));
 });
@@ -91,6 +93,13 @@ async function iniciarSesionExitosa(session) {
 
   if (perfil && perfil.rol === "administrador") {
     document.querySelectorAll("[data-admin-only]").forEach(n => n.style.display = "block");
+  }
+  if (perfil && perfil.rol === "consulta") {
+    document.querySelectorAll(".solo-staff").forEach(n => n.style.display = "none");
+  }
+  if (!esAdmin()) {
+    el("cotizacion-cerrar-adeudo").disabled = true;
+    el("cotizacion-cerrar-adeudo").parentElement.title = "Cerrar con adeudo requiere autorización de un administrador.";
   }
 
   await cargarDatosBase();
@@ -224,7 +233,7 @@ async function cargarClientes(filtro = "") {
       <td>${c.telefono || "—"}</td>
       <td>${c.correo || "—"}</td>
       <td>${(c.vehiculos || []).length}</td>
-      <td><button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button></td>
+      <td>${puedeEscribir() ? `<button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button>` : ""}</td>
     </tr>`).join("") : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados. Da de alta el primero.</td></tr>`;
 
   document.querySelectorAll("[data-editar-cliente]").forEach(b => {
@@ -296,7 +305,7 @@ async function cargarVehiculos(filtro = "") {
       <td>${v.kilometraje_actual != null ? v.kilometraje_actual.toLocaleString("es-MX") : "—"}</td>
       <td>
         <button class="btn secundario pequeno" data-historial="${v.id}">Historial</button>
-        <button class="btn secundario pequeno" data-editar-vehiculo="${v.id}">Editar</button>
+        ${puedeEscribir() ? `<button class="btn secundario pequeno" data-editar-vehiculo="${v.id}">Editar</button>` : ""}
       </td>
     </tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">Sin vehículos registrados.</td></tr>`;
 
@@ -438,7 +447,7 @@ async function cargarCatalogo(filtro = "") {
       <td>${s.categorias ? s.categorias.nombre : "—"}</td>
       <td>$${money(s.precio_venta)}</td>
       <td><span class="badge ${s.estado === 'activo' ? 'verde' : 'gris'}">${s.estado}</span></td>
-      <td><button class="btn secundario pequeno" data-editar-servicio="${s.id}">Editar</button></td>
+      <td>${puedeEscribir() ? `<button class="btn secundario pequeno" data-editar-servicio="${s.id}">Editar</button>` : ""}</td>
     </tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">Catálogo vacío. Agrega un servicio o usa la importación masiva.</td></tr>`;
 
   document.querySelectorAll("[data-editar-servicio]").forEach(b => {
@@ -541,7 +550,7 @@ document.querySelectorAll(".pestana").forEach(p => {
   p.addEventListener("click", () => {
     document.querySelectorAll(".pestana").forEach(x => x.classList.remove("activa"));
     p.classList.add("activa");
-    ["datos", "pagos", "seguimiento"].forEach(nombre => {
+    ["datos", "pagos", "seguimiento", "archivos"].forEach(nombre => {
       el("pestana-" + nombre).style.display = nombre === p.dataset.pestana ? "block" : "none";
     });
   });
@@ -561,10 +570,19 @@ async function abrirCotizacion(id) {
   el("cotizacion-km").value = "";
   el("cotizacion-observaciones").value = "";
   el("cotizacion-estado-comercial").value = "borrador";
+  el("cotizacion-estado-comercial").disabled = false;
+  el("cotizacion-estado-comercial").title = "";
   el("cotizacion-estado-servicio").value = "sin_iniciar";
+  el("cotizacion-notas-finales").value = "";
+  el("cotizacion-cerrar-adeudo").checked = false;
+  el("cotizacion-motivo-adeudo").value = "";
+  el("cotizacion-fecha-compromiso").value = "";
+  el("campos-adeudo").style.display = "none";
+  actualizarVisibilidadPanelCierre();
   estado.conceptosEnEdicion = [];
   el("tabla-pagos-cotizacion").innerHTML = "";
   el("lista-seguimiento").innerHTML = "";
+  el("galeria-archivos").innerHTML = "";
 
   if (id) {
     const { data: c } = await sb.from("cotizaciones").select("*").eq("id", id).single();
@@ -577,6 +595,23 @@ async function abrirCotizacion(id) {
     el("cotizacion-observaciones").value = c.observaciones || "";
     el("cotizacion-estado-comercial").value = c.estado_comercial;
     el("cotizacion-estado-servicio").value = c.estado_servicio;
+
+    // Reapertura: solo un administrador puede reabrir una cotización ya cerrada
+    const yaCerrada = c.estado_comercial === "cerrada";
+    el("cotizacion-estado-comercial").disabled = yaCerrada && !esAdmin();
+    if (yaCerrada && !esAdmin()) {
+      el("cotizacion-estado-comercial").title = "Esta cotización está cerrada. Solo un administrador puede reabrirla.";
+    } else {
+      el("cotizacion-estado-comercial").title = "";
+    }
+    el("cotizacion-notas-finales").value = c.notas_finales || "";
+    el("cotizacion-cerrar-adeudo").checked = !!c.cerrada_con_adeudo;
+    el("cotizacion-motivo-adeudo").value = c.motivo_adeudo || "";
+    el("cotizacion-fecha-compromiso").value = c.fecha_compromiso_pago || "";
+    el("campos-adeudo").style.display = c.cerrada_con_adeudo ? "block" : "none";
+    actualizarVisibilidadPanelCierre();
+
+    await cargarArchivosCotizacion(id);
 
     const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", id).order("created_at");
     estado.conceptosEnEdicion = (detalle || []).map(d => ({ ...d }));
@@ -636,6 +671,50 @@ el("btn-agregar-concepto").addEventListener("click", () => {
   renderConceptos();
 });
 
+// --- Reglas de cierre ---
+function actualizarVisibilidadPanelCierre() {
+  const valor = el("cotizacion-estado-comercial").value;
+  el("panel-cierre").style.display = valor === "cerrada" ? "block" : "none";
+}
+el("cotizacion-estado-comercial").addEventListener("change", actualizarVisibilidadPanelCierre);
+el("cotizacion-cerrar-adeudo").addEventListener("change", () => {
+  el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none";
+});
+
+/**
+ * Valida las reglas de cierre de la sección 7 de la especificación antes de
+ * permitir guardar una cotización como "cerrada". Devuelve un texto de error
+ * o null si todo está en regla.
+ */
+function validarReglasDeCierre(saldoActual) {
+  if (el("cotizacion-estado-comercial").value !== "cerrada") return null;
+
+  if (el("cotizacion-estado-servicio").value !== "vehiculo_entregado") {
+    return "No se puede cerrar: el estado de servicio debe ser 'Vehículo entregado'.";
+  }
+  if (!el("cotizacion-notas-finales").value.trim()) {
+    return "No se puede cerrar: faltan las notas finales.";
+  }
+
+  const cierreConAdeudo = el("cotizacion-cerrar-adeudo").checked;
+  if (!cierreConAdeudo) {
+    if (saldoActual > 0) {
+      return "No se puede cerrar normalmente con saldo pendiente. Marca 'Cerrar con adeudo' si aplica, o registra el pago faltante.";
+    }
+  } else {
+    if (!esAdmin()) {
+      return "Cerrar con adeudo requiere autorización de un administrador.";
+    }
+    if (!el("cotizacion-motivo-adeudo").value.trim()) {
+      return "Cerrar con adeudo requiere un motivo.";
+    }
+    if (!el("cotizacion-fecha-compromiso").value) {
+      return "Cerrar con adeudo requiere una fecha compromiso de pago.";
+    }
+  }
+  return null;
+}
+
 el("btn-guardar-cotizacion").addEventListener("click", async () => {
   const clienteId = el("cotizacion-cliente").value;
   const vehiculoId = el("cotizacion-vehiculo").value;
@@ -647,6 +726,22 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
   const descuento = estado.conceptosEnEdicion.reduce((s, c) => s + (c.descuento || 0), 0);
   const total = Math.max(0, subtotal - descuento);
 
+  // Saldo actual (necesario para validar reglas de cierre)
+  let saldoActual = total;
+  const idExistente = el("cotizacion-id").value;
+  if (idExistente) {
+    const { data: pagosValidos } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado", "valido");
+    const pagado = (pagosValidos || []).reduce((s, p) => s + Number(p.importe), 0);
+    saldoActual = Math.max(0, total - pagado);
+  }
+  const errorCierre = validarReglasDeCierre(saldoActual);
+  if (errorCierre) {
+    mostrarMensaje("mensaje-cotizacion", errorCierre, "error");
+    return;
+  }
+
+  const cierreConAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
+
   const encabezado = {
     cliente_id: clienteId,
     vehiculo_id: vehiculoId,
@@ -655,7 +750,12 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
     observaciones: el("cotizacion-observaciones").value.trim() || null,
     estado_comercial: el("cotizacion-estado-comercial").value,
     estado_servicio: el("cotizacion-estado-servicio").value,
+    estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"),
     subtotal, descuento_total: descuento, total,
+    notas_finales: el("cotizacion-notas-finales").value.trim() || null,
+    cerrada_con_adeudo: cierreConAdeudo,
+    motivo_adeudo: cierreConAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null,
+    fecha_compromiso_pago: cierreConAdeudo ? el("cotizacion-fecha-compromiso").value : null,
   };
 
   let id = el("cotizacion-id").value;
@@ -704,7 +804,7 @@ async function cargarPagosCotizacion(cotizacionId) {
       <td>${p.metodo}</td>
       <td>${p.referencia || "—"}</td>
       <td><span class="badge ${p.estado === 'valido' ? 'verde' : 'rojo'}">${p.estado}</span></td>
-      <td>${p.estado === 'valido' ? `<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>` : ""}</td>
+      <td>${p.estado === 'valido' && esAdmin() ? `<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>` : ""}</td>
     </tr>`).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin pagos registrados.</td></tr>`;
 
   document.querySelectorAll("[data-reversar]").forEach(b => {
@@ -816,6 +916,57 @@ el("input-importar").addEventListener("change", async (ev) => {
 function parseCSV(texto) {
   return texto.trim().split(/\r?\n/).map(linea => linea.split(",").map(c => c.trim()));
 }
+
+// ============================================================================
+// ARCHIVOS ADJUNTOS (Supabase Storage, bucket "evidencias")
+// ============================================================================
+async function cargarArchivosCotizacion(cotizacionId) {
+  const { data } = await sb.from("archivos_adjuntos").select("*").eq("cotizacion_id", cotizacionId).order("created_at", { ascending: false });
+  const lista = data || [];
+  el("galeria-archivos").innerHTML = lista.length ? lista.map(a => {
+    const url = sb.storage.from("evidencias").getPublicUrl(a.storage_path).data.publicUrl;
+    const esImagen = /\.(jpg|jpeg|png|gif|webp)$/i.test(a.nombre_archivo);
+    return `
+      <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; background:white;">
+        <a href="${url}" target="_blank" rel="noopener">
+          ${esImagen
+            ? `<img src="${url}" style="width:100%; height:100px; object-fit:cover; display:block;">`
+            : `<div style="width:100%; height:100px; display:flex; align-items:center; justify-content:center; background:#eef2f5; font-size:12px; color:var(--text-mute);">Archivo</div>`}
+        </a>
+        <div style="padding:6px 8px; font-size:11px;">
+          <span class="badge gris">${a.tipo || "otro"}</span>
+          <div style="margin-top:4px; color:var(--text-mute); word-break:break-all;">${a.nombre_archivo}</div>
+        </div>
+      </div>`;
+  }).join("") : `<p style="color:var(--text-mute); font-size:13px;">Sin archivos todavía.</p>`;
+}
+
+el("btn-subir-archivo").addEventListener("click", async () => {
+  const id = el("cotizacion-id").value;
+  if (!id) { mostrarMensaje("mensaje-archivo", "Guarda la cotización antes de subir archivos.", "error"); return; }
+  const archivo = el("archivo-input").files[0];
+  if (!archivo) { mostrarMensaje("mensaje-archivo", "Selecciona un archivo primero.", "error"); return; }
+
+  const nombreLimpio = archivo.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const ruta = `${id}/${Date.now()}_${nombreLimpio}`;
+
+  const { error: errorSubida } = await sb.storage.from("evidencias").upload(ruta, archivo);
+  if (errorSubida) {
+    mostrarMensaje("mensaje-archivo", "Error al subir: " + errorSubida.message, "error");
+    return;
+  }
+  const registro = {
+    cotizacion_id: id, tipo: el("archivo-tipo").value,
+    nombre_archivo: archivo.name, storage_path: ruta,
+    usuario_id: estado.usuario.id,
+  };
+  const { data, error } = await sb.from("archivos_adjuntos").insert(registro).select().single();
+  if (error) { mostrarMensaje("mensaje-archivo", "Archivo subido pero no se pudo registrar: " + error.message, "error"); return; }
+  await registrarBitacora("archivos_adjuntos", data.id, "crear", null, registro);
+  el("archivo-input").value = "";
+  mostrarMensaje("mensaje-archivo", "Archivo subido correctamente.");
+  cargarArchivosCotizacion(id);
+});
 
 // ============================================================================
 // PDF DE COTIZACIÓN
