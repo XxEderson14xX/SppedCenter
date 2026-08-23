@@ -356,17 +356,69 @@ el("form-vehiculo").addEventListener("submit", async (ev) => {
 });
 
 async function verHistorialVehiculo(vehiculoId) {
+  const v = estado.vehiculos.find(x => x.id === vehiculoId);
+  el("titulo-historial").textContent = `Historial de ${v ? v.placa : ""}`;
+  el("subtitulo-historial").textContent = v
+    ? `${v.marca} ${v.modelo} ${v.anio || ""} · Cliente: ${v.clientes ? v.clientes.nombre_completo : "—"} · Km actual: ${v.kilometraje_actual != null ? v.kilometraje_actual.toLocaleString("es-MX") : "—"}`
+    : "";
+
   const { data: cots } = await sb.from("cotizaciones")
-    .select("*, clientes(nombre_completo)")
+    .select("*")
     .eq("vehiculo_id", vehiculoId)
     .order("fecha", { ascending: false });
-  const v = estado.vehiculos.find(x => x.id === vehiculoId);
-  const resumen = (cots || []).map(c =>
-    `${c.folio} · ${c.fecha} · $${money(c.total)} · ${ETIQUETAS_COMERCIAL[c.estado_comercial]}`
-  ).join("\n") || "Sin cotizaciones registradas para este vehículo.";
-  alert(`Historial de ${v ? v.placa : ""}\n\n${resumen}`);
-  // Nota: en una siguiente iteración esto se reemplaza por una vista dedicada
-  // con línea de tiempo, pagos y notas — aquí queda el gancho de datos listo.
+  const lista = cots || [];
+  const ids = lista.map(c => c.id);
+
+  let pagosPorCotizacion = {};
+  let seguimientosTodos = [];
+  if (ids.length) {
+    const [{ data: pagos }, { data: seguimientos }] = await Promise.all([
+      sb.from("pagos").select("*").in("cotizacion_id", ids).eq("estado", "valido"),
+      sb.from("seguimientos").select("*").in("cotizacion_id", ids).order("created_at", { ascending: false }),
+    ]);
+    (pagos || []).forEach(p => {
+      pagosPorCotizacion[p.cotizacion_id] = (pagosPorCotizacion[p.cotizacion_id] || 0) + Number(p.importe);
+    });
+    seguimientosTodos = seguimientos || [];
+  }
+
+  const totalFacturado = lista.reduce((s, c) => s + Number(c.total || 0), 0);
+  const saldoAcumulado = lista.reduce((s, c) => s + Math.max(0, Number(c.total || 0) - (pagosPorCotizacion[c.id] || 0)), 0);
+
+  const kpis = el("kpis-historial").querySelectorAll(".valor");
+  kpis[0].textContent = lista.length;
+  kpis[1].textContent = "$" + money(totalFacturado);
+  kpis[2].textContent = "$" + money(saldoAcumulado);
+
+  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => {
+    const saldo = Math.max(0, Number(c.total || 0) - (pagosPorCotizacion[c.id] || 0));
+    return `
+    <tr>
+      <td>${c.folio}</td>
+      <td>${c.fecha || "—"}</td>
+      <td>${c.kilometraje_visita != null ? c.kilometraje_visita.toLocaleString("es-MX") : "—"}</td>
+      <td>$${money(c.total)}</td>
+      <td>$${money(saldo)}</td>
+      <td>${badgeComercial(c.estado_comercial)}</td>
+      <td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo todavía no tiene cotizaciones.</td></tr>`;
+
+  document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => {
+    b.addEventListener("click", () => {
+      cerrarModal("modal-historial");
+      abrirCotizacion(b.dataset.abrirDesdeHistorial);
+    });
+  });
+
+  el("lista-historial-seguimiento").innerHTML = seguimientosTodos.length
+    ? seguimientosTodos.map(s => {
+        const cot = lista.find(c => c.id === s.cotizacion_id);
+        return `<li><strong>${cot ? cot.folio : ""}</strong> · ${s.descripcion}<div class="meta">${new Date(s.created_at).toLocaleString("es-MX")}</div></li>`;
+      }).join("")
+    : `<li class="meta">Sin movimientos de seguimiento todavía.</li>`;
+
+  abrirModal("modal-historial");
 }
 
 // ============================================================================
@@ -763,6 +815,141 @@ el("input-importar").addEventListener("change", async (ev) => {
 });
 function parseCSV(texto) {
   return texto.trim().split(/\r?\n/).map(linea => linea.split(",").map(c => c.trim()));
+}
+
+// ============================================================================
+// PDF DE COTIZACIÓN
+// ============================================================================
+el("btn-pdf-cotizacion").addEventListener("click", async () => {
+  const id = el("cotizacion-id").value;
+  if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de generar el PDF.", "error"); return; }
+  await generarPDFCotizacion(id);
+});
+
+async function generarPDFCotizacion(cotizacionId) {
+  const { data: c } = await sb.from("cotizaciones")
+    .select("*, clientes(nombre_completo, telefono, correo), vehiculos(placa, marca, modelo, anio, vin)")
+    .eq("id", cotizacionId).single();
+  if (!c) { alert("No se encontró la cotización."); return; }
+  const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
+  const { data: pagos } = await sb.from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado", "valido");
+  const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
+  const saldo = Math.max(0, Number(c.total || 0) - pagado);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const navy = [15, 42, 74];
+  const teal = [27, 111, 122];
+  const grisTexto = [90, 100, 110];
+  let y = 50;
+
+  // Encabezado
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, 612, 70, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont(undefined, "bold");
+  doc.text("Taller Automotriz", 40, 30);
+  doc.setFontSize(10);
+  doc.setFont(undefined, "normal");
+  doc.text("Cotización de servicio", 40, 46);
+  doc.setFontSize(12);
+  doc.setFont(undefined, "bold");
+  doc.text(c.folio, 572, 30, { align: "right" });
+  doc.setFontSize(9);
+  doc.setFont(undefined, "normal");
+  doc.text("Fecha: " + (c.fecha || ""), 572, 46, { align: "right" });
+
+  y = 95;
+  doc.setTextColor(...navy);
+  doc.setFontSize(11);
+  doc.setFont(undefined, "bold");
+  doc.text("Cliente", 40, y);
+  doc.text("Vehículo", 320, y);
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 30, 30);
+  y += 16;
+  doc.text(c.clientes ? c.clientes.nombre_completo : "—", 40, y);
+  doc.text(c.vehiculos ? `${c.vehiculos.marca} ${c.vehiculos.modelo} ${c.vehiculos.anio || ""}` : "—", 320, y);
+  y += 14;
+  doc.text(c.clientes && c.clientes.telefono ? "Tel: " + c.clientes.telefono : "", 40, y);
+  doc.text(c.vehiculos ? "Placa: " + c.vehiculos.placa : "", 320, y);
+  y += 14;
+  doc.text(c.clientes && c.clientes.correo ? c.clientes.correo : "", 40, y);
+  doc.text(c.vehiculos && c.vehiculos.vin ? "VIN: " + c.vehiculos.vin : "", 320, y);
+
+  y += 28;
+
+  const filas = (detalle || []).map(d => [
+    d.descripcion,
+    String(d.cantidad),
+    "$" + money(d.precio_unitario),
+    d.descuento ? "$" + money(d.descuento) : "—",
+    "$" + money(d.importe),
+  ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [["Concepto", "Cant.", "P. Unitario", "Descuento", "Importe"]],
+    body: filas,
+    theme: "striped",
+    headStyles: { fillColor: teal, textColor: 255, fontSize: 9 },
+    styles: { fontSize: 9, textColor: [30, 30, 30] },
+    columnStyles: { 1: { halign: "center" }, 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    margin: { left: 40, right: 40 },
+  });
+
+  let yFinal = doc.lastAutoTable.finalY + 16;
+  doc.setFontSize(9.5);
+  doc.setTextColor(...grisTexto);
+  doc.text("Subtotal:", 420, yFinal);
+  doc.text("$" + money(c.subtotal), 572, yFinal, { align: "right" });
+  yFinal += 14;
+  doc.text("Descuento:", 420, yFinal);
+  doc.text("$" + money(c.descuento_total), 572, yFinal, { align: "right" });
+  yFinal += 16;
+  doc.setDrawColor(...navy);
+  doc.line(420, yFinal - 10, 572, yFinal - 10);
+  doc.setFontSize(12);
+  doc.setFont(undefined, "bold");
+  doc.setTextColor(...navy);
+  doc.text("Total:", 420, yFinal);
+  doc.text("$" + money(c.total), 572, yFinal, { align: "right" });
+  yFinal += 16;
+  doc.setFontSize(9.5);
+  doc.setFont(undefined, "normal");
+  doc.setTextColor(...grisTexto);
+  doc.text("Pagado:", 420, yFinal);
+  doc.text("$" + money(pagado), 572, yFinal, { align: "right" });
+  yFinal += 14;
+  doc.setFont(undefined, "bold");
+  doc.setTextColor(saldo > 0 ? 192 : 47, saldo > 0 ? 57 : 143, saldo > 0 ? 43 : 95);
+  doc.text("Saldo pendiente:", 420, yFinal);
+  doc.text("$" + money(saldo), 572, yFinal, { align: "right" });
+
+  if (c.observaciones) {
+    yFinal += 30;
+    doc.setFontSize(10);
+    doc.setFont(undefined, "bold");
+    doc.setTextColor(...navy);
+    doc.text("Observaciones", 40, yFinal);
+    yFinal += 14;
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 30, 30);
+    const lineas = doc.splitTextToSize(c.observaciones, 530);
+    doc.text(lineas, 40, yFinal);
+    yFinal += lineas.length * 11;
+  }
+
+  yFinal += 26;
+  doc.setFontSize(8);
+  doc.setTextColor(...grisTexto);
+  const terminos = "Precios sujetos a cambio sin previo aviso hasta su autorización. La entrega del vehículo está condicionada a la liquidación del saldo pendiente, salvo autorización expresa de cierre con adeudo.";
+  doc.text(doc.splitTextToSize(terminos, 530), 40, yFinal);
+
+  doc.save(`${c.folio}.pdf`);
 }
 
 // ============================================================================
