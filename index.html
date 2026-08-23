@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taller Automotriz · Sistema de administración</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<!-- ======================= PANTALLA DE LOGIN ======================= -->
+<div id="pantalla-login">
+  <div class="login-card">
+    <h1>Sistema Taller Automotriz</h1>
+    <p class="sub">Inicia sesión con tu cuenta del taller</p>
+    <form id="form-login">
+      <label for="login-correo">Correo</label>
+      <input type="email" id="login-correo" required autocomplete="username">
+      <label for="login-clave">Contraseña</label>
+      <input type="password" id="login-clave" required autocomplete="current-password">
+      <button type="submit">Ingresar</button>
+      <div id="login-error"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ======================= APP PRINCIPAL ======================= -->
+<div id="app-shell">
+  <nav id="nav-lateral">
+    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V1</small></div>
+
+    <a class="nav-item activo" data-modulo="inicio">Inicio</a>
+    <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
+    <a class="nav-item" data-modulo="clientes">Clientes</a>
+    <a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a>
+    <a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a>
+    <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
+    <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
+
+    <div class="pie">
+      <div id="pie-usuario">—</div>
+      <div id="pie-rol">—</div>
+      <button id="btn-salir">Cerrar sesión</button>
+    </div>
+  </nav>
+
+  <main id="contenido">
+
+    <!-- ---------------- INICIO / DASHBOARD ---------------- -->
+    <section class="modulo activo" id="modulo-inicio">
+      <div class="encabezado-modulo">
+        <div>
+          <h2>Panel operativo</h2>
+          <p>Vista general del taller</p>
+        </div>
+      </div>
+      <div class="kpis" id="kpis-inicio">
+        <div class="kpi"><div class="valor">—</div><div class="etiqueta">Cotizaciones abiertas</div></div>
+        <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Pendientes de autorización</div></div>
+        <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">En proceso</div></div>
+        <div class="kpi acento-navy"><div class="valor">—</div><div class="etiqueta">Con saldo pendiente</div></div>
+      </div>
+      <div class="panel">
+        <h3>Actividad reciente</h3>
+        <table class="tabla">
+          <thead><tr><th>Folio</th><th>Placa</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead>
+          <tbody id="tabla-actividad-reciente"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------- COTIZACIONES ---------------- -->
+    <section class="modulo" id="modulo-cotizaciones">
+      <div class="encabezado-modulo">
+        <div><h2>Cotizaciones</h2><p>Ciclo completo: crear, autorizar, dar seguimiento y cerrar</p></div>
+        <button class="btn" id="btn-nueva-cotizacion">+ Nueva cotización</button>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-cotizacion" placeholder="Buscar por folio, placa o cliente…">
+        <select id="filtro-estado-comercial">
+          <option value="">Estado comercial: todos</option>
+          <option value="borrador">Borrador</option>
+          <option value="enviada">Enviada</option>
+          <option value="pendiente_autorizacion">Pendiente de autorización</option>
+          <option value="autorizada">Autorizada</option>
+          <option value="rechazada">Rechazada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="cerrada">Cerrada</option>
+        </select>
+        <div class="spacer"></div>
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Vehículo</th><th>Total</th><th>Saldo</th><th>Comercial</th><th>Servicio</th><th></th></tr></thead>
+          <tbody id="tabla-cotizaciones"><tr><td colspan="8" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------- CLIENTES ---------------- -->
+    <section class="modulo" id="modulo-clientes">
+      <div class="encabezado-modulo">
+        <div><h2>Clientes</h2><p>Alta, edición y consulta</p></div>
+        <button class="btn" id="btn-nuevo-cliente">+ Nuevo cliente</button>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-cliente" placeholder="Buscar por nombre, teléfono o correo…">
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Vehículos</th><th></th></tr></thead>
+          <tbody id="tabla-clientes"><tr><td colspan="5" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------- VEHÍCULOS / HISTORIAL ---------------- -->
+    <section class="modulo" id="modulo-vehiculos">
+      <div class="encabezado-modulo">
+        <div><h2>Vehículos e historial</h2><p>Busca por placa, VIN, marca o modelo</p></div>
+        <button class="btn" id="btn-nuevo-vehiculo">+ Nuevo vehículo</button>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-vehiculo" placeholder="Buscar por placa, VIN, marca o modelo…">
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Placa</th><th>Marca / Modelo</th><th>Año</th><th>Cliente</th><th>Km actual</th><th></th></tr></thead>
+          <tbody id="tabla-vehiculos"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------- CATÁLOGO ---------------- -->
+    <section class="modulo" id="modulo-catalogo">
+      <div class="encabezado-modulo">
+        <div><h2>Catálogo de servicios</h2><p>Servicios, mano de obra, consumibles y paquetes</p></div>
+        <button class="btn" id="btn-nuevo-servicio">+ Nuevo servicio</button>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tabla-catalogo"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------- IMPORTACIÓN ---------------- -->
+    <section class="modulo" id="modulo-importacion">
+      <div class="encabezado-modulo">
+        <div><h2>Importación masiva de servicios</h2><p>Sube un CSV con columnas: codigo, nombre, descripcion, categoria, unidad_medida, precio_venta, costo_interno, impuesto, estado, observaciones</p></div>
+      </div>
+      <div class="panel">
+        <input type="file" id="input-importar" accept=".csv">
+        <div id="mensaje-importacion" style="margin-top:10px;"></div>
+        <div id="previa-importacion"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- BITÁCORA ---------------- -->
+    <section class="modulo" id="modulo-bitacora">
+      <div class="encabezado-modulo">
+        <div><h2>Bitácora</h2><p>Acciones sensibles registradas por el sistema</p></div>
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Fecha</th><th>Tabla</th><th>Acción</th><th>Detalle</th></tr></thead>
+          <tbody id="tabla-bitacora"><tr><td colspan="4" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ======================= MODALES ======================= -->
+<div class="modal-fondo" id="modal-cliente">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-cliente">×</button>
+    <h3 id="titulo-modal-cliente">Nuevo cliente</h3>
+    <form id="form-cliente">
+      <input type="hidden" id="cliente-id">
+      <div class="form-grid">
+        <div class="campo"><label>Nombre completo *</label><input id="cliente-nombre" required></div>
+        <div class="campo"><label>Teléfono</label><input id="cliente-telefono"></div>
+        <div class="campo"><label>Correo</label><input type="email" id="cliente-correo"></div>
+        <div class="campo"><label>RFC</label><input id="cliente-rfc"></div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Dirección</label><input id="cliente-direccion"></div>
+      <div class="campo" style="margin-top:12px;"><label>Observaciones</label><textarea id="cliente-observaciones"></textarea></div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-cliente">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+      <div id="mensaje-cliente"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-fondo" id="modal-vehiculo">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-vehiculo">×</button>
+    <h3 id="titulo-modal-vehiculo">Nuevo vehículo</h3>
+    <form id="form-vehiculo">
+      <input type="hidden" id="vehiculo-id">
+      <div class="form-grid">
+        <div class="campo"><label>Cliente *</label><select id="vehiculo-cliente" required></select></div>
+        <div class="campo"><label>Placa *</label><input id="vehiculo-placa" required></div>
+        <div class="campo"><label>VIN</label><input id="vehiculo-vin"></div>
+        <div class="campo"><label>Marca *</label><input id="vehiculo-marca" required></div>
+        <div class="campo"><label>Modelo *</label><input id="vehiculo-modelo" required></div>
+        <div class="campo"><label>Año</label><input type="number" id="vehiculo-anio"></div>
+        <div class="campo"><label>Motor</label><input id="vehiculo-motor"></div>
+        <div class="campo"><label>Combustible</label><input id="vehiculo-combustible"></div>
+        <div class="campo"><label>Color</label><input id="vehiculo-color"></div>
+        <div class="campo"><label>Kilometraje actual</label><input type="number" id="vehiculo-km"></div>
+      </div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-vehiculo">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+      <div id="mensaje-vehiculo"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-fondo" id="modal-servicio">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-servicio">×</button>
+    <h3 id="titulo-modal-servicio">Nuevo servicio</h3>
+    <form id="form-servicio">
+      <input type="hidden" id="servicio-id">
+      <div class="form-grid">
+        <div class="campo"><label>Código *</label><input id="servicio-codigo" required></div>
+        <div class="campo"><label>Nombre *</label><input id="servicio-nombre" required></div>
+        <div class="campo"><label>Categoría</label><select id="servicio-categoria"></select></div>
+        <div class="campo"><label>Unidad de medida</label><input id="servicio-unidad" value="servicio"></div>
+        <div class="campo"><label>Precio de venta *</label><input type="number" step="0.01" id="servicio-precio" required></div>
+        <div class="campo"><label>Costo interno</label><input type="number" step="0.01" id="servicio-costo"></div>
+        <div class="campo"><label>Impuesto (%)</label><input type="number" step="0.01" id="servicio-impuesto" value="0"></div>
+        <div class="campo"><label>Estado</label>
+          <select id="servicio-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select>
+        </div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Descripción</label><textarea id="servicio-descripcion"></textarea></div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-servicio">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+      <div id="mensaje-servicio"></div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal grande: detalle de cotización -->
+<div class="modal-fondo" id="modal-cotizacion">
+  <div class="modal" style="max-width:880px;">
+    <button class="cerrar" data-cerrar-modal="modal-cotizacion">×</button>
+    <h3 id="titulo-modal-cotizacion">Nueva cotización</h3>
+    <input type="hidden" id="cotizacion-id">
+
+    <div class="pestanas">
+      <div class="pestana activa" data-pestana="datos">Datos y conceptos</div>
+      <div class="pestana" data-pestana="pagos">Pagos</div>
+      <div class="pestana" data-pestana="seguimiento">Seguimiento</div>
+    </div>
+
+    <div class="vista-pestana" id="pestana-datos">
+      <div class="form-grid">
+        <div class="campo"><label>Cliente *</label><select id="cotizacion-cliente" required></select></div>
+        <div class="campo"><label>Vehículo *</label><select id="cotizacion-vehiculo" required></select></div>
+        <div class="campo"><label>Entrega estimada</label><input type="date" id="cotizacion-entrega"></div>
+        <div class="campo"><label>Kilometraje de esta visita</label><input type="number" id="cotizacion-km"></div>
+        <div class="campo"><label>Estado comercial</label>
+          <select id="cotizacion-estado-comercial">
+            <option value="borrador">Borrador</option>
+            <option value="enviada">Enviada</option>
+            <option value="pendiente_autorizacion">Pendiente de autorización</option>
+            <option value="autorizada">Autorizada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="cerrada">Cerrada</option>
+          </select>
+        </div>
+        <div class="campo"><label>Estado de servicio</label>
+          <select id="cotizacion-estado-servicio">
+            <option value="sin_iniciar">Sin iniciar</option>
+            <option value="diagnostico">Diagnóstico</option>
+            <option value="esperando_refacciones">Esperando refacciones</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="terminado">Terminado</option>
+            <option value="vehiculo_entregado">Vehículo entregado</option>
+          </select>
+        </div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Observaciones</label><textarea id="cotizacion-observaciones"></textarea></div>
+
+      <h3 style="margin-top:18px;">Conceptos</h3>
+      <table class="detalle-items" id="tabla-conceptos">
+        <thead>
+          <tr><th style="width:120px;">Tipo</th><th>Descripción</th><th style="width:70px;">Cant.</th><th style="width:100px;">Precio</th><th style="width:90px;">Desc.</th><th style="width:100px;">Importe</th><th></th></tr>
+        </thead>
+        <tbody id="cuerpo-conceptos"></tbody>
+      </table>
+      <button type="button" class="btn secundario pequeno" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto</button>
+
+      <div class="totales-cotizacion">
+        Subtotal: $<span id="cotizacion-subtotal">0.00</span><br>
+        Descuento: $<span id="cotizacion-descuento">0.00</span><br>
+        <strong>Total: $<span id="cotizacion-total">0.00</span></strong>
+      </div>
+
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-cotizacion">Cerrar</button>
+        <button type="button" class="btn" id="btn-guardar-cotizacion">Guardar cotización</button>
+      </div>
+      <div id="mensaje-cotizacion"></div>
+    </div>
+
+    <div class="vista-pestana" id="pestana-pagos" style="display:none;">
+      <div class="panel" style="box-shadow:none; border:1px solid var(--border);">
+        <h3>Registrar pago</h3>
+        <div class="form-grid">
+          <div class="campo"><label>Importe</label><input type="number" step="0.01" id="pago-importe"></div>
+          <div class="campo"><label>Método</label>
+            <select id="pago-metodo">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="deposito">Depósito</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="campo"><label>Referencia</label><input id="pago-referencia"></div>
+          <div class="campo"><label>Comentario</label><input id="pago-comentario"></div>
+        </div>
+        <button type="button" class="btn pequeno" id="btn-agregar-pago" style="margin-top:10px;">Agregar pago</button>
+      </div>
+      <table class="tabla" style="margin-top:14px;">
+        <thead><tr><th>Fecha</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-pagos-cotizacion"></tbody>
+      </table>
+      <div class="totales-cotizacion">Saldo pendiente: $<strong id="cotizacion-saldo">0.00</strong></div>
+    </div>
+
+    <div class="vista-pestana" id="pestana-seguimiento" style="display:none;">
+      <div class="form-grid">
+        <div class="campo" style="grid-column: 1 / -1;"><label>Nueva nota de seguimiento</label><textarea id="seguimiento-texto"></textarea></div>
+      </div>
+      <button type="button" class="btn pequeno" id="btn-agregar-seguimiento" style="margin-top:8px;">Agregar al seguimiento</button>
+      <ul class="linea-tiempo" id="lista-seguimiento" style="margin-top:16px;"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
