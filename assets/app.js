@@ -1176,6 +1176,153 @@ function renderTablaUsuarios(filtro = "") {
 
 el("buscar-usuario").addEventListener("input", e => renderTablaUsuarios(e.target.value));
 el("btn-refrescar-usuarios").addEventListener("click", () => cargarUsuarios(el("buscar-usuario").value));
+el("btn-nuevo-usuario").addEventListener("click", () => abrirModalNuevoUsuario());
+
+// --- Modal de creación de usuario nuevo ---
+function limpiarModalNuevoUsuario() {
+  el("nuevo-nombre").value = "";
+  el("nuevo-username").value = "";
+  el("nuevo-correo").value = "";
+  el("nuevo-password").value = "";
+  el("nuevo-rol").value = "consulta";
+  el("nuevo-username-disponibilidad").textContent = "";
+  el("nuevo-mostrar-password").checked = false;
+  el("nuevo-password").type = "text";
+  el("mensaje-nuevo-usuario").innerHTML = "";
+}
+
+function abrirModalNuevoUsuario() {
+  limpiarModalNuevoUsuario();
+  abrirModal("modal-nuevo-usuario");
+  setTimeout(() => el("nuevo-nombre").focus(), 100);
+}
+
+// Mostrar/ocultar contraseña
+el("nuevo-mostrar-password").addEventListener("change", () => {
+  el("nuevo-password").type = el("nuevo-mostrar-password").checked ? "text" : "password";
+});
+
+// Generador de contraseña aleatoria
+el("btn-generar-password").addEventListener("click", () => {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789@#$%";
+  let pwd = "";
+  for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+  el("nuevo-password").value = pwd;
+  el("nuevo-password").type = "text";
+  el("nuevo-mostrar-password").checked = true;
+});
+
+// Auto-generar username cuando se escribe el nombre
+el("nuevo-nombre").addEventListener("blur", async () => {
+  if (el("nuevo-username").value.trim()) return; // ya tiene username, no sobreescribir
+  await generarUsernameDesdeNombre("nuevo-nombre", "nuevo-username", "nuevo-username-disponibilidad");
+});
+
+el("btn-generar-nuevo-username").addEventListener("click", async () => {
+  await generarUsernameDesdeNombre("nuevo-nombre", "nuevo-username", "nuevo-username-disponibilidad");
+});
+
+el("nuevo-username").addEventListener("input", async () => {
+  await verificarDisponibilidadUsername("nuevo-username", "nuevo-username-disponibilidad", null);
+});
+
+// Función genérica de generación (reutilizable para ambos modales)
+async function generarUsernameDesdeNombre(idNombre, idUsername, idDisp) {
+  const nombre = el(idNombre).value.trim();
+  if (!nombre) { el(idDisp).textContent = "Escribe primero el nombre completo."; return; }
+  const partes = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/);
+  if (partes.length < 2) { el(idDisp).textContent = "Escribe nombre y apellido."; return; }
+  const apellido = partes[partes.length - 1];
+  const pNombre = partes[0];
+  const candidatos = [
+    pNombre[0] + apellido,
+    pNombre.slice(0, 2) + apellido,
+    pNombre.slice(0, 3) + apellido,
+    pNombre + apellido,
+    pNombre[0] + apellido + "2",
+  ];
+  el(idDisp).textContent = "Verificando…";
+  for (const c of candidatos) {
+    const { data: disp } = await sb.rpc("username_disponible", { p_username: c });
+    if (disp) {
+      el(idUsername).value = c;
+      el(idDisp).innerHTML = `<span style="color:var(--green);">✓ Disponible: @${c}</span>`;
+      return;
+    }
+  }
+  const fallback = pNombre[0] + apellido + Math.floor(Math.random() * 90 + 10);
+  el(idUsername).value = fallback;
+  el(idDisp).innerHTML = `<span style="color:var(--orange);">⚠ Sugerencia: @${fallback} — puedes cambiarlo.</span>`;
+}
+
+async function verificarDisponibilidadUsername(idUsername, idDisp, idUsuarioActual) {
+  const val = el(idUsername).value.trim().toLowerCase();
+  if (!val) { el(idDisp).textContent = ""; return; }
+  if (val.length < 3) { el(idDisp).innerHTML = `<span style="color:var(--text-mute);">Mínimo 3 caracteres.</span>`; return; }
+  if (idUsuarioActual) {
+    const u = _listaUsuarios.find(x => x.id === idUsuarioActual);
+    if (u && u.username === val) { el(idDisp).innerHTML = `<span style="color:var(--teal);">Usuario actual.</span>`; return; }
+  }
+  const { data: disp } = await sb.rpc("username_disponible", { p_username: val });
+  el(idDisp).innerHTML = disp
+    ? `<span style="color:var(--green);">✓ Disponible</span>`
+    : `<span style="color:var(--red);">✗ Ya está en uso.</span>`;
+}
+
+el("btn-crear-usuario").addEventListener("click", async () => {
+  const nombre = el("nuevo-nombre").value.trim();
+  const username = el("nuevo-username").value.trim().toLowerCase();
+  const correo = el("nuevo-correo").value.trim().toLowerCase();
+  const password = el("nuevo-password").value.trim();
+  const rol = el("nuevo-rol").value;
+
+  if (!nombre)   { mostrarMensaje("mensaje-nuevo-usuario", "El nombre completo es obligatorio.", "error"); return; }
+  if (!username || username.length < 3) { mostrarMensaje("mensaje-nuevo-usuario", "El nombre de usuario es obligatorio (mínimo 3 caracteres).", "error"); return; }
+  if (!/^[a-z0-9_]+$/.test(username)) { mostrarMensaje("mensaje-nuevo-usuario", "El usuario solo puede tener letras, números y guión bajo.", "error"); return; }
+  if (!correo || !correo.includes("@")) { mostrarMensaje("mensaje-nuevo-usuario", "El correo es obligatorio.", "error"); return; }
+  if (!password || password.length < 6) { mostrarMensaje("mensaje-nuevo-usuario", "La contraseña debe tener al menos 6 caracteres.", "error"); return; }
+
+  el("btn-crear-usuario").disabled = true;
+  el("btn-crear-usuario").textContent = "Creando…";
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const edgeFnUrl = `${SUPABASE_URL}/functions/v1/crear-usuario`;
+
+    const resp = await fetch(edgeFnUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ nombre_completo: nombre, username, correo, password, rol }),
+    });
+
+    const resultado = await resp.json();
+
+    if (!resp.ok || !resultado.ok) {
+      mostrarMensaje("mensaje-nuevo-usuario", resultado.mensaje || "Error al crear el usuario.", "error");
+      return;
+    }
+
+    mostrarMensaje("mensaje-nuevo-usuario", `✓ ${resultado.mensaje}`);
+    await registrarBitacora("perfiles", resultado.id, "crear_usuario", null, { username, nombre, rol });
+
+    // Cerrar modal y refrescar lista después de un momento
+    setTimeout(async () => {
+      cerrarModal("modal-nuevo-usuario");
+      limpiarModalNuevoUsuario();
+      await cargarUsuarios();
+    }, 1500);
+
+  } catch (err) {
+    mostrarMensaje("mensaje-nuevo-usuario", "Error de conexión: " + err.message, "error");
+  } finally {
+    el("btn-crear-usuario").disabled = false;
+    el("btn-crear-usuario").textContent = "Crear usuario";
+  }
+});
 
 // --- Modal de edición de perfil ---
 function abrirModalUsuario(u) {
@@ -1192,61 +1339,12 @@ function abrirModalUsuario(u) {
 
 // Generador de username: inicial_nombre + apellido, con fallback a 2da letra
 el("btn-generar-username").addEventListener("click", async () => {
-  const nombre = el("usuario-nombre").value.trim();
-  if (!nombre) { el("username-disponibilidad").textContent = "Escribe primero el nombre completo."; return; }
-
-  const partes = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/);
-  // Necesitamos al menos nombre y apellido
-  if (partes.length < 2) { el("username-disponibilidad").textContent = "Escribe nombre y apellido completos."; return; }
-
-  const apellido = partes[partes.length - 1];       // último token = primer apellido
-  const primerNombre = partes[0];
-
-  const candidatos = [
-    primerNombre[0] + apellido,                     // ecastillo
-    primerNombre.slice(0, 2) + apellido,            // ercastillo
-    primerNombre.slice(0, 3) + apellido,            // erncastillo
-    primerNombre + apellido,                        // ernestocastillo
-    primerNombre[0] + apellido + "2",               // ecastillo2 (fallback numérico)
-  ];
-
-  el("username-disponibilidad").textContent = "Verificando…";
-
-  for (const candidato of candidatos) {
-    const usuarioActualId = el("usuario-id").value;
-    // No marcar como "ocupado" si el username es del mismo usuario que estamos editando
-    const { data: disponible } = await sb.rpc("username_disponible", { p_username: candidato });
-    const usuarioActual = _listaUsuarios.find(u => u.id === usuarioActualId);
-    const esElMismo = usuarioActual && usuarioActual.username === candidato;
-
-    if (disponible || esElMismo) {
-      el("usuario-username").value = candidato;
-      el("username-disponibilidad").innerHTML = `<span style="color:var(--green);">✓ Disponible: @${candidato}</span>`;
-      return;
-    }
-  }
-  // Todos los candidatos ocupados — ofrecer uno numérico
-  const fallback = primerNombre[0] + apellido + Math.floor(Math.random() * 90 + 10);
-  el("usuario-username").value = fallback;
-  el("username-disponibilidad").innerHTML = `<span style="color:var(--orange);">⚠ Sugerencia con número: @${fallback} — puedes cambiarlo manualmente.</span>`;
+  await generarUsernameDesdeNombre("usuario-nombre", "usuario-username", "username-disponibilidad");
 });
 
 // Verificar disponibilidad en tiempo real al escribir
 el("usuario-username").addEventListener("input", async () => {
-  const val = el("usuario-username").value.trim().toLowerCase();
-  if (!val) { el("username-disponibilidad").textContent = ""; return; }
-  if (val.length < 3) { el("username-disponibilidad").innerHTML = `<span style="color:var(--text-mute);">Mínimo 3 caracteres.</span>`; return; }
-
-  const usuarioActualId = el("usuario-id").value;
-  const usuarioActual = _listaUsuarios.find(u => u.id === usuarioActualId);
-  if (usuarioActual && usuarioActual.username === val) {
-    el("username-disponibilidad").innerHTML = `<span style="color:var(--teal);">Este es el usuario actual.</span>`;
-    return;
-  }
-  const { data: disponible } = await sb.rpc("username_disponible", { p_username: val });
-  el("username-disponibilidad").innerHTML = disponible
-    ? `<span style="color:var(--green);">✓ Disponible</span>`
-    : `<span style="color:var(--red);">✗ Ya está en uso — elige otro.</span>`;
+  await verificarDisponibilidadUsername("usuario-username", "username-disponibilidad", el("usuario-id").value);
 });
 
 el("btn-guardar-usuario").addEventListener("click", async () => {
