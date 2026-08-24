@@ -12,10 +12,10 @@
 <div id="pantalla-login">
   <div class="login-card">
     <h1>Sistema Taller Automotriz</h1>
-    <p class="sub">Inicia sesión con tu cuenta del taller</p>
+    <p class="sub">Inicia sesión con tu usuario o correo</p>
     <form id="form-login">
-      <label for="login-correo">Correo</label>
-      <input type="email" id="login-correo" required autocomplete="username">
+      <label for="login-correo">Usuario o correo</label>
+      <input type="text" id="login-correo" required autocomplete="username" placeholder="ecastillo o correo@ejemplo.com">
       <label for="login-clave">Contraseña</label>
       <input type="password" id="login-clave" required autocomplete="current-password">
       <button type="submit">Ingresar</button>
@@ -35,6 +35,7 @@
     <a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a>
     <a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a>
     <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
+    <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
     <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
 
     <div class="pie">
@@ -157,6 +158,44 @@
         <input type="file" id="input-importar" accept=".csv">
         <div id="mensaje-importacion" style="margin-top:10px;"></div>
         <div id="previa-importacion"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- USUARIOS ---------------- -->
+    <section class="modulo" id="modulo-usuarios">
+      <div class="encabezado-modulo">
+        <div><h2>Gestión de usuarios</h2><p>Crea y administra los accesos al sistema</p></div>
+      </div>
+
+      <div class="panel" style="background:#f0f7fa; border:1px solid #c5dce5; margin-bottom:18px;">
+        <strong style="color:var(--navy);">¿Cómo crear un usuario nuevo?</strong>
+        <ol style="margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--text-mute); line-height:1.7;">
+          <li>Ve a <strong>Supabase → Authentication → Users → Add user</strong> y crea el usuario con su correo y contraseña. Marca <strong>"Auto Confirm User"</strong>.</li>
+          <li>Regresa aquí: el usuario aparecerá en la tabla de abajo en unos segundos (refresca si no aparece).</li>
+          <li>Da clic en <strong>"Editar perfil"</strong>, asígnale nombre completo, nombre de usuario y rol, y guarda.</li>
+        </ol>
+      </div>
+
+      <div class="barra-acciones">
+        <input type="search" id="buscar-usuario" placeholder="Buscar por nombre o usuario…">
+        <div class="spacer"></div>
+        <button class="btn secundario" id="btn-refrescar-usuarios">↻ Refrescar</button>
+      </div>
+
+      <div class="panel">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Nombre completo</th>
+              <th>Correo</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tabla-usuarios"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
       </div>
     </section>
 
@@ -391,6 +430,62 @@
       </div>
       <div id="galeria-archivos" style="margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px;"></div>
     </div>
+  </div>
+</div>
+
+<!-- Modal: editar perfil de usuario -->
+<div class="modal-fondo" id="modal-usuario">
+  <div class="modal" style="max-width:540px;">
+    <button class="cerrar" data-cerrar-modal="modal-usuario">×</button>
+    <h3 id="titulo-modal-usuario">Editar perfil de usuario</h3>
+
+    <div class="campo" style="margin-bottom:12px;">
+      <label>Correo (solo lectura — se gestiona en Supabase)</label>
+      <input id="usuario-correo-display" readonly style="background:#f4f6f8; color:var(--text-mute);">
+    </div>
+
+    <div class="form-grid dos">
+      <div class="campo">
+        <label>Nombre completo *</label>
+        <input id="usuario-nombre" placeholder="Ej. Ernesto Castillo Colin">
+      </div>
+      <div class="campo">
+        <label>Nombre de usuario *
+          <span style="font-weight:400; color:var(--text-mute);"> — se usa para iniciar sesión</span>
+        </label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="usuario-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
+          <button type="button" class="btn secundario pequeno" id="btn-generar-username" title="Generar automáticamente desde el nombre">✦ Generar</button>
+        </div>
+        <div id="username-disponibilidad" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
+      </div>
+    </div>
+
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo">
+        <label>Rol *</label>
+        <select id="usuario-rol">
+          <option value="consulta">Consulta (solo lectura)</option>
+          <option value="recepcion">Recepción / Asesor</option>
+          <option value="administrador">Administrador</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Estado</label>
+        <select id="usuario-activo">
+          <option value="true">Activo</option>
+          <option value="false">Inactivo (acceso bloqueado)</option>
+        </select>
+      </div>
+    </div>
+
+    <input type="hidden" id="usuario-id">
+
+    <div style="margin-top:18px; text-align:right;">
+      <button type="button" class="btn secundario" data-cerrar-modal="modal-usuario">Cancelar</button>
+      <button type="button" class="btn" id="btn-guardar-usuario">Guardar perfil</button>
+    </div>
+    <div id="mensaje-usuario"></div>
   </div>
 </div>
 
