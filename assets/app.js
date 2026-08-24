@@ -66,9 +66,20 @@ const ETIQUETAS_SERVICIO = {
 el("form-login").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   el("login-error").textContent = "";
-  const correo = el("login-correo").value.trim();
+  let entrada = el("login-correo").value.trim();
   const clave = el("login-clave").value;
-  const { data, error } = await sb.auth.signInWithPassword({ email: correo, password: clave });
+
+  // Si no tiene "@" asumimos que es un username → buscar el correo real
+  if (!entrada.includes("@")) {
+    const { data: correo, error: errCorreo } = await sb.rpc("correo_por_username", { p_username: entrada });
+    if (errCorreo || !correo) {
+      el("login-error").textContent = "Usuario no encontrado o inactivo.";
+      return;
+    }
+    entrada = correo;
+  }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email: entrada, password: clave });
   if (error) {
     el("login-error").textContent = "Usuario o contraseña incorrectos.";
     return;
@@ -127,6 +138,7 @@ document.querySelectorAll(".nav-item").forEach(item => {
     const cargas = {
       inicio: cargarInicio, cotizaciones: cargarCotizaciones, clientes: cargarClientes,
       vehiculos: cargarVehiculos, catalogo: cargarCatalogo, bitacora: cargarBitacora,
+      usuarios: cargarUsuarios,
     };
     if (cargas[item.dataset.modulo]) cargas[item.dataset.modulo]();
   });
@@ -1102,6 +1114,168 @@ async function generarPDFCotizacion(cotizacionId) {
 
   doc.save(`${c.folio}.pdf`);
 }
+
+// ============================================================================
+// MÓDULO: GESTIÓN DE USUARIOS
+// ============================================================================
+
+let _listaUsuarios = [];
+
+async function cargarUsuarios(filtro = "") {
+  el("tabla-usuarios").innerHTML = `<tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr>`;
+  const { data, error } = await sb.rpc("listar_usuarios");
+  if (error) {
+    el("tabla-usuarios").innerHTML = `<tr><td colspan="6" class="vacio-tabla" style="color:var(--red);">Error: ${error.message}</td></tr>`;
+    return;
+  }
+  _listaUsuarios = data || [];
+  renderTablaUsuarios(filtro);
+}
+
+function renderTablaUsuarios(filtro = "") {
+  let lista = _listaUsuarios;
+  if (filtro) {
+    const f = filtro.toLowerCase();
+    lista = lista.filter(u =>
+      (u.nombre_completo || "").toLowerCase().includes(f) ||
+      (u.username || "").toLowerCase().includes(f) ||
+      (u.correo || "").toLowerCase().includes(f)
+    );
+  }
+
+  const ROLES_ETIQUETA = { administrador: "Administrador", recepcion: "Recepción", consulta: "Consulta" };
+  el("tabla-usuarios").innerHTML = lista.length
+    ? lista.map(u => `
+      <tr>
+        <td>
+          <strong>${u.username ? "@" + u.username : "<span style='color:var(--orange)'>⚠ Sin usuario</span>"}</strong>
+        </td>
+        <td>${u.nombre_completo || "—"}</td>
+        <td style="color:var(--text-mute); font-size:12px;">${u.correo || "—"}</td>
+        <td>
+          <span class="badge ${u.rol === 'administrador' ? '' : u.rol === 'recepcion' ? 'verde' : 'gris'}">
+            ${ROLES_ETIQUETA[u.rol] || u.rol}
+          </span>
+        </td>
+        <td>
+          <span class="badge ${u.activo ? 'verde' : 'rojo'}">${u.activo ? "Activo" : "Inactivo"}</span>
+        </td>
+        <td>
+          <button class="btn secundario pequeno" data-editar-usuario="${u.id}">Editar perfil</button>
+        </td>
+      </tr>`).join("")
+    : `<tr><td colspan="6" class="vacio-tabla">No hay usuarios. Crea uno desde Supabase → Authentication → Users.</td></tr>`;
+
+  document.querySelectorAll("[data-editar-usuario]").forEach(b => {
+    b.addEventListener("click", () => {
+      const u = _listaUsuarios.find(x => x.id === b.dataset.editarUsuario);
+      abrirModalUsuario(u);
+    });
+  });
+}
+
+el("buscar-usuario").addEventListener("input", e => renderTablaUsuarios(e.target.value));
+el("btn-refrescar-usuarios").addEventListener("click", () => cargarUsuarios(el("buscar-usuario").value));
+
+// --- Modal de edición de perfil ---
+function abrirModalUsuario(u) {
+  el("titulo-modal-usuario").textContent = u && u.nombre_completo ? `Perfil de ${u.nombre_completo}` : "Configurar perfil de usuario";
+  el("usuario-id").value = u ? u.id : "";
+  el("usuario-correo-display").value = u ? (u.correo || "—") : "";
+  el("usuario-nombre").value = u ? u.nombre_completo || "" : "";
+  el("usuario-username").value = u ? u.username || "" : "";
+  el("usuario-rol").value = u ? u.rol || "consulta" : "consulta";
+  el("usuario-activo").value = u && u.activo !== false ? "true" : "false";
+  el("username-disponibilidad").textContent = "";
+  abrirModal("modal-usuario");
+}
+
+// Generador de username: inicial_nombre + apellido, con fallback a 2da letra
+el("btn-generar-username").addEventListener("click", async () => {
+  const nombre = el("usuario-nombre").value.trim();
+  if (!nombre) { el("username-disponibilidad").textContent = "Escribe primero el nombre completo."; return; }
+
+  const partes = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/);
+  // Necesitamos al menos nombre y apellido
+  if (partes.length < 2) { el("username-disponibilidad").textContent = "Escribe nombre y apellido completos."; return; }
+
+  const apellido = partes[partes.length - 1];       // último token = primer apellido
+  const primerNombre = partes[0];
+
+  const candidatos = [
+    primerNombre[0] + apellido,                     // ecastillo
+    primerNombre.slice(0, 2) + apellido,            // ercastillo
+    primerNombre.slice(0, 3) + apellido,            // erncastillo
+    primerNombre + apellido,                        // ernestocastillo
+    primerNombre[0] + apellido + "2",               // ecastillo2 (fallback numérico)
+  ];
+
+  el("username-disponibilidad").textContent = "Verificando…";
+
+  for (const candidato of candidatos) {
+    const usuarioActualId = el("usuario-id").value;
+    // No marcar como "ocupado" si el username es del mismo usuario que estamos editando
+    const { data: disponible } = await sb.rpc("username_disponible", { p_username: candidato });
+    const usuarioActual = _listaUsuarios.find(u => u.id === usuarioActualId);
+    const esElMismo = usuarioActual && usuarioActual.username === candidato;
+
+    if (disponible || esElMismo) {
+      el("usuario-username").value = candidato;
+      el("username-disponibilidad").innerHTML = `<span style="color:var(--green);">✓ Disponible: @${candidato}</span>`;
+      return;
+    }
+  }
+  // Todos los candidatos ocupados — ofrecer uno numérico
+  const fallback = primerNombre[0] + apellido + Math.floor(Math.random() * 90 + 10);
+  el("usuario-username").value = fallback;
+  el("username-disponibilidad").innerHTML = `<span style="color:var(--orange);">⚠ Sugerencia con número: @${fallback} — puedes cambiarlo manualmente.</span>`;
+});
+
+// Verificar disponibilidad en tiempo real al escribir
+el("usuario-username").addEventListener("input", async () => {
+  const val = el("usuario-username").value.trim().toLowerCase();
+  if (!val) { el("username-disponibilidad").textContent = ""; return; }
+  if (val.length < 3) { el("username-disponibilidad").innerHTML = `<span style="color:var(--text-mute);">Mínimo 3 caracteres.</span>`; return; }
+
+  const usuarioActualId = el("usuario-id").value;
+  const usuarioActual = _listaUsuarios.find(u => u.id === usuarioActualId);
+  if (usuarioActual && usuarioActual.username === val) {
+    el("username-disponibilidad").innerHTML = `<span style="color:var(--teal);">Este es el usuario actual.</span>`;
+    return;
+  }
+  const { data: disponible } = await sb.rpc("username_disponible", { p_username: val });
+  el("username-disponibilidad").innerHTML = disponible
+    ? `<span style="color:var(--green);">✓ Disponible</span>`
+    : `<span style="color:var(--red);">✗ Ya está en uso — elige otro.</span>`;
+});
+
+el("btn-guardar-usuario").addEventListener("click", async () => {
+  const id = el("usuario-id").value;
+  const username = el("usuario-username").value.trim().toLowerCase();
+  const nombre = el("usuario-nombre").value.trim();
+  const rol = el("usuario-rol").value;
+  const activo = el("usuario-activo").value === "true";
+
+  if (!nombre) { mostrarMensaje("mensaje-usuario", "El nombre completo es obligatorio.", "error"); return; }
+  if (!username || username.length < 3) { mostrarMensaje("mensaje-usuario", "El nombre de usuario debe tener al menos 3 caracteres.", "error"); return; }
+  if (!/^[a-z0-9_]+$/.test(username)) { mostrarMensaje("mensaje-usuario", "El usuario solo puede tener letras minúsculas, números y guión bajo.", "error"); return; }
+
+  const { error } = await sb.rpc("actualizar_perfil", {
+    p_id: id,
+    p_username: username,
+    p_nombre_completo: nombre,
+    p_rol: rol,
+    p_activo: activo,
+  });
+  if (error) { mostrarMensaje("mensaje-usuario", "Error: " + error.message, "error"); return; }
+
+  await registrarBitacora("perfiles", id, "actualizar_perfil", null, { username, nombre, rol, activo });
+  mostrarMensaje("mensaje-usuario", "Perfil guardado correctamente.");
+  cerrarModal("modal-usuario");
+  await cargarUsuarios();
+  // Refrescar datos base por si cambió el nombre del usuario actual
+  await cargarDatosBase();
+});
 
 // ============================================================================
 // MÓDULO: BITÁCORA
