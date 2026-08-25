@@ -491,12 +491,26 @@
         </select>
       </div>
     </div>
-    <input type="hidden" id="usuario-id">
-    <div style="margin-top:18px; text-align:right;">
-      <button type="button" class="btn secundario" data-cerrar-modal="modal-usuario">Cancelar</button>
-      <button type="button" class="btn" id="btn-guardar-usuario">Guardar perfil</button>
+ <input type="hidden" id="usuario-id">
+    <!-- V7 · Restablecer contraseña -->
+    <div class="campo" style="margin-top:14px;">
+      <label>Nueva contraseña <span style="font-weight:400; color:var(--text-mute);">— déjala vacía si no la vas a cambiar</span></label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input id="usuario-password" placeholder="mínimo 6 caracteres" style="flex:1;">
+        <button type="button" class="btn secundario pequeno" id="btn-reset-password">Restablecer</button>
+      </div>
+    </div>
+
+    <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center;">
+      <button type="button" class="btn peligro" id="btn-eliminar-usuario">Eliminar usuario</button>
+      <div>
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-usuario">Cancelar</button>
+        <button type="button" class="btn" id="btn-guardar-usuario">Guardar perfil</button>
+      </div>
     </div>
     <div id="mensaje-usuario"></div>
+```
+
   </div>
 </div>
 <!-- ======================= MODAL: CREAR USUARIO (V4) ======================= -->
