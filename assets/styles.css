@@ -136,6 +136,8 @@ a { color: var(--teal); }
   opacity: .5; cursor: not-allowed !important; filter: grayscale(.3);
 }
 .btn-bloqueado:hover { background: var(--teal); }
+.btn.peligro { background: #fff; color: var(--red); border: 1px solid #f5c6c0; }
+.btn.peligro:hover { background: #fdecea; }
 
 /* -------------------- FORMULARIOS -------------------- */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
