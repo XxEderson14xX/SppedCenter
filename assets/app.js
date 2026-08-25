@@ -1006,6 +1006,44 @@ el("btn-guardar-usuario").addEventListener("click", async () => {
   cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
 });
 
+// V7 · Restablecer contraseña (vía Edge Function segura)
+el("btn-reset-password")?.addEventListener("click", async () => {
+  const id = el("usuario-id").value;
+  const password = el("usuario-password").value;
+  if (!id) { mostrarMensaje("mensaje-usuario", "Primero abre el perfil de un usuario.", "error"); return; }
+  if (!password || password.length < 6) { mostrarMensaje("mensaje-usuario", "La contraseña debe tener al menos 6 caracteres.", "error"); return; }
+  mostrarMensaje("mensaje-usuario", "Actualizando contraseña…");
+  const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "cambiar_password", usuario_id: id, password } });
+  if (error) {
+    let detalle = error.message;
+    try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); detalle = c.mensaje || c.error || detalle; } } catch(_) {}
+    mostrarMensaje("mensaje-usuario", "Error: " + detalle, "error"); return;
+  }
+  if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
+  await registrarBitacora("perfiles", id, "cambiar_password", null, { por: estado.usuario.id });
+  el("usuario-password").value = "";
+  mostrarMensaje("mensaje-usuario", "Contraseña actualizada correctamente.");
+});
+
+// V7 · Eliminar usuario (vía Edge Function segura)
+el("btn-eliminar-usuario")?.addEventListener("click", async () => {
+  const id = el("usuario-id").value;
+  const nombre = el("usuario-nombre").value || "este usuario";
+  if (!id) { mostrarMensaje("mensaje-usuario", "Primero abre el perfil de un usuario.", "error"); return; }
+  if (id === estado.usuario.id) { mostrarMensaje("mensaje-usuario", "No puedes eliminar tu propia cuenta.", "error"); return; }
+  if (!confirm(`¿Seguro que deseas ELIMINAR a "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  mostrarMensaje("mensaje-usuario", "Eliminando usuario…");
+  const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "eliminar", usuario_id: id } });
+  if (error) {
+    let detalle = error.message;
+    try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); detalle = c.mensaje || c.error || detalle; } } catch(_) {}
+    mostrarMensaje("mensaje-usuario", "Error: " + detalle, "error"); return;
+  }
+  if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
+  await registrarBitacora("perfiles", id, "eliminar_usuario", null, { nombre });
+  cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
+});
+
 async function generarUsernameDesde(nombreCompleto) {
   const partes = nombreCompleto.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/\s+/).filter(Boolean);
   if (partes.length < 2) return null;
