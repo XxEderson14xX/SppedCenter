@@ -1,8 +1,7 @@
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V6
-// Captura inline de cliente/vehículo desde la cotización + identidad permanente
-// (VIN para autos, id interno para clientes). Incluye correcciones V5 y el
-// "gate" de pestañas (Pagos/Seguimiento/Archivos) que exige guardar primero.
+// Sistema Taller Automotriz · app.js · Versión V8
+// V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
+// + V8 (cascada de catálogo maestro en la cotización + creación de combos).
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -11,7 +10,6 @@ const estado = {
   clientes: [], vehiculos: [], servicios: [], categorias: [],
   cotizacionActualId: null, conceptosEnEdicion: [],
 };
-// Selección inline de la cotización (V6)
 const seleccion = { clienteId: null, vehiculoId: null };
 
 // ---------------------------------------------------------------------------
@@ -26,11 +24,7 @@ function mostrarMensaje(idc, texto, tipo = "ok") {
 }
 async function registrarBitacora(tabla, registroId, accion, anteriores, nuevos) {
   try {
-    await sb.from("bitacora").insert({
-      tabla_afectada: tabla, registro_id: registroId, accion,
-      valores_anteriores: anteriores || null, valores_nuevos: nuevos || null,
-      usuario_id: estado.usuario ? estado.usuario.id : null,
-    });
+    await sb.from("bitacora").insert({ tabla_afectada: tabla, registro_id: registroId, accion, valores_anteriores: anteriores || null, valores_nuevos: nuevos || null, usuario_id: estado.usuario ? estado.usuario.id : null });
   } catch (e) { console.warn("Bitácora:", e); }
 }
 function abrirModal(id) { el(id).classList.add("activo"); }
@@ -77,10 +71,7 @@ async function iniciarSesionExitosa(session) {
   await cargarDatosBase();
   cargarInicio();
 }
-async function verificarSesion() {
-  const { data } = await sb.auth.getSession();
-  if (data.session) await iniciarSesionExitosa(data.session);
-}
+async function verificarSesion() { const { data } = await sb.auth.getSession(); if (data.session) await iniciarSesionExitosa(data.session); }
 verificarSesion();
 
 // ============================================================================
@@ -114,10 +105,7 @@ async function cargarDatosBase() {
 function llenarSelect(tipo, idSelect) {
   const sel = el(idSelect); if (!sel) return;
   const lista = tipo === "cliente" ? estado.clientes : [];
-  sel.innerHTML = `<option value="">Selecciona…</option>` + lista.map(c => {
-    const extra = c.telefono || c.rfc || c.correo || "sin contacto";
-    return `<option value="${c.id}">${c.nombre_completo} — ${extra}</option>`;
-  }).join("");
+  sel.innerHTML = `<option value="">Selecciona…</option>` + lista.map(c => { const extra = c.telefono || c.rfc || c.correo || "sin contacto"; return `<option value="${c.id}">${c.nombre_completo} — ${extra}</option>`; }).join("");
 }
 function llenarSelectCategorias() {
   const sel = el("servicio-categoria"); if (!sel) return;
@@ -141,12 +129,8 @@ async function cargarInicio() {
   const enProceso = lista.filter(c => c.estado_servicio === "en_proceso");
   const conSaldo = lista.filter(c => Number(c.total||0) - (pagosPorCot[c.id]||0) > 0);
   const kpis = el("kpis-inicio").querySelectorAll(".valor");
-  kpis[0].textContent = abiertas.length; kpis[1].textContent = pendientes.length;
-  kpis[2].textContent = enProceso.length; kpis[3].textContent = conSaldo.length;
-  el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => {
-    const saldo = Math.max(0, Number(c.total||0) - (pagosPorCot[c.id]||0));
-    return `<tr><td>${c.folio}</td><td>${c.vehiculos?c.vehiculos.placa:"—"}</td><td>${c.clientes?c.clientes.nombre_completo:"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`;
-  }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
+  kpis[0].textContent = abiertas.length; kpis[1].textContent = pendientes.length; kpis[2].textContent = enProceso.length; kpis[3].textContent = conSaldo.length;
+  el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, Number(c.total||0) - (pagosPorCot[c.id]||0)); return `<tr><td>${c.folio}</td><td>${c.vehiculos?c.vehiculos.placa:"—"}</td><td>${c.clientes?c.clientes.nombre_completo:"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
 }
 
 // ============================================================================
@@ -161,7 +145,6 @@ async function cargarClientes(filtro = "") {
 }
 el("buscar-cliente").addEventListener("input", (e) => cargarClientes(e.target.value));
 el("btn-nuevo-cliente").addEventListener("click", () => abrirModalCliente(null));
-
 function abrirModalCliente(c) {
   el("titulo-modal-cliente").textContent = c ? "Editar cliente" : "Nuevo cliente";
   el("cliente-id").value = c ? c.id : "";
@@ -177,22 +160,12 @@ el("form-cliente").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const id = el("cliente-id").value;
   const telNuevo = el("cliente-telefono").value.trim();
-  const registro = {
-    nombre_completo: el("cliente-nombre").value.trim(),
-    telefono: telNuevo || null,
-    correo: el("cliente-correo").value.trim() || null,
-    rfc: el("cliente-rfc").value.trim() || null,
-    direccion: el("cliente-direccion").value.trim() || null,
-    observaciones: el("cliente-observaciones").value.trim() || null,
-  };
+  const registro = { nombre_completo: el("cliente-nombre").value.trim(), telefono: telNuevo || null, correo: el("cliente-correo").value.trim() || null, rfc: el("cliente-rfc").value.trim() || null, direccion: el("cliente-direccion").value.trim() || null, observaciones: el("cliente-observaciones").value.trim() || null };
   let error, data;
   if (id) {
-    // Si cambió el teléfono, usar la función que guarda historial (V6)
     const anterior = estado.clientes.find(c => c.id === id);
     ({ data, error } = await sb.from("clientes").update(registro).eq("id", id).select().single());
-    if (!error && anterior && (anterior.telefono || "") !== (telNuevo || "") && telNuevo) {
-      await sb.rpc("cambiar_telefono", { p_cliente_id: id, p_nuevo_tel: telNuevo });
-    }
+    if (!error && anterior && (anterior.telefono || "") !== (telNuevo || "") && telNuevo) await sb.rpc("cambiar_telefono", { p_cliente_id: id, p_nuevo_tel: telNuevo });
     if (!error) await registrarBitacora("clientes", id, "actualizar", null, registro);
   } else {
     registro.created_by = estado.usuario.id;
@@ -200,13 +173,11 @@ el("form-cliente").addEventListener("submit", async (ev) => {
     if (!error) await registrarBitacora("clientes", data.id, "crear", null, registro);
   }
   if (error) { mostrarMensaje("mensaje-cliente", "Error al guardar: " + error.message, "error"); return; }
-  cerrarModal("modal-cliente");
-  await cargarDatosBase();
-  cargarClientes();
+  cerrarModal("modal-cliente"); await cargarDatosBase(); cargarClientes();
 });
 
 // ============================================================================
-// VEHÍCULOS (módulo) + cascada de catálogo
+// VEHÍCULOS + cascada de catálogo de autos
 // ============================================================================
 function normalizarPlaca(p){ return (p||"").toUpperCase().replace(/[\s-]/g,""); }
 async function cargarVehiculos(filtro = "") {
@@ -219,7 +190,6 @@ async function cargarVehiculos(filtro = "") {
 }
 el("buscar-vehiculo").addEventListener("input", (e) => cargarVehiculos(e.target.value));
 el("btn-nuevo-vehiculo").addEventListener("click", () => abrirModalVehiculo(null));
-
 function abrirModalVehiculo(v) {
   el("titulo-modal-vehiculo").textContent = v ? "Editar vehículo" : "Nuevo vehículo";
   el("vehiculo-id").value = v ? v.id : "";
@@ -241,25 +211,12 @@ el("form-vehiculo").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const id = el("vehiculo-id").value;
   const placaNueva = el("vehiculo-placa").value.trim().toUpperCase();
-  const registro = {
-    cliente_id: el("vehiculo-cliente").value,
-    vin: el("vehiculo-vin").value.trim().toUpperCase() || null,
-    placa: placaNueva,
-    marca: el("vehiculo-marca").value.trim(),
-    modelo: el("vehiculo-modelo").value.trim(),
-    anio: el("vehiculo-anio").value ? Number(el("vehiculo-anio").value) : null,
-    motor: el("vehiculo-motor").value.trim() || null,
-    combustible: el("vehiculo-combustible").value.trim() || null,
-    color: el("vehiculo-color").value.trim() || null,
-    kilometraje_actual: el("vehiculo-km").value ? Number(el("vehiculo-km").value) : null,
-  };
+  const registro = { cliente_id: el("vehiculo-cliente").value, vin: el("vehiculo-vin").value.trim().toUpperCase() || null, placa: placaNueva, marca: el("vehiculo-marca").value.trim(), modelo: el("vehiculo-modelo").value.trim(), anio: el("vehiculo-anio").value ? Number(el("vehiculo-anio").value) : null, motor: el("vehiculo-motor").value.trim() || null, combustible: el("vehiculo-combustible").value.trim() || null, color: el("vehiculo-color").value.trim() || null, kilometraje_actual: el("vehiculo-km").value ? Number(el("vehiculo-km").value) : null };
   let error, data;
   if (id) {
     const anterior = estado.vehiculos.find(v => v.id === id);
     ({ data, error } = await sb.from("vehiculos").update(registro).eq("id", id).select().single());
-    if (!error && anterior && (anterior.placa || "") !== placaNueva && placaNueva) {
-      await sb.rpc("cambiar_placa", { p_vehiculo_id: id, p_nueva_placa: placaNueva, p_nota: "Cambio desde ficha" });
-    }
+    if (!error && anterior && (anterior.placa || "") !== placaNueva && placaNueva) await sb.rpc("cambiar_placa", { p_vehiculo_id: id, p_nueva_placa: placaNueva, p_nota: "Cambio desde ficha" });
     if (!error) await registrarBitacora("vehiculos", id, "actualizar", null, registro);
   } else {
     registro.created_by = estado.usuario.id;
@@ -267,27 +224,16 @@ el("form-vehiculo").addEventListener("submit", async (ev) => {
     if (!error) await registrarBitacora("vehiculos", data.id, "crear", null, registro);
   }
   if (error) { mostrarMensaje("mensaje-vehiculo", "Error al guardar: " + error.message, "error"); return; }
-  if (el("cat-manual") && el("cat-manual").checked && registro.marca && registro.modelo && registro.anio) {
-    await sb.rpc("agregar_auto_catalogo", { p_anio: registro.anio, p_marca: registro.marca, p_modelo: registro.modelo, p_version: null, p_motor: registro.motor || null });
-  }
-  cerrarModal("modal-vehiculo");
-  await cargarDatosBase();
-  cargarVehiculos();
+  if (el("cat-manual") && el("cat-manual").checked && registro.marca && registro.modelo && registro.anio) await sb.rpc("agregar_auto_catalogo", { p_anio: registro.anio, p_marca: registro.marca, p_modelo: registro.modelo, p_version: null, p_motor: registro.motor || null });
+  cerrarModal("modal-vehiculo"); await cargarDatosBase(); cargarVehiculos();
 });
-
-// --- Cascada del modal de vehículo ---
 async function cargarAniosCatalogo() {
   if (!el("cat-anio")) return;
   const { data } = await sb.rpc("autos_anios");
   el("cat-anio").innerHTML = `<option value="">—</option>` + (data||[]).map(a=>`<option value="${a}">${a}</option>`).join("");
   ["cat-marca","cat-modelo","cat-version","cat-motor"].forEach(i=>{ if(el(i)) el(i).innerHTML=`<option value="">—</option>`; });
 }
-function sincronizarVehiculoDesdeCatalogo() {
-  el("vehiculo-anio").value = el("cat-anio").value || "";
-  el("vehiculo-marca").value = el("cat-marca").value || "";
-  el("vehiculo-modelo").value = el("cat-modelo").value || "";
-  el("vehiculo-motor").value = el("cat-motor").value || "";
-}
+function sincronizarVehiculoDesdeCatalogo() { el("vehiculo-anio").value = el("cat-anio").value || ""; el("vehiculo-marca").value = el("cat-marca").value || ""; el("vehiculo-modelo").value = el("cat-modelo").value || ""; el("vehiculo-motor").value = el("cat-motor").value || ""; }
 el("cat-anio")?.addEventListener("change", async () => {
   ["cat-marca","cat-modelo","cat-version","cat-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
   if (!el("cat-anio").value) return;
@@ -322,10 +268,7 @@ async function verHistorialVehiculo(vehiculoId) {
   const ids = lista.map(c => c.id);
   let pagosPorCot = {}, seguimientos = [];
   if (ids.length) {
-    const [{ data: pagos }, { data: segs }] = await Promise.all([
-      sb.from("pagos").select("*").in("cotizacion_id", ids).eq("estado","valido"),
-      sb.from("seguimientos").select("*").in("cotizacion_id", ids).order("created_at", { ascending: false }),
-    ]);
+    const [{ data: pagos }, { data: segs }] = await Promise.all([ sb.from("pagos").select("*").in("cotizacion_id", ids).eq("estado","valido"), sb.from("seguimientos").select("*").in("cotizacion_id", ids).order("created_at", { ascending: false }) ]);
     (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id]||0) + Number(p.importe); });
     seguimientos = segs || [];
   }
@@ -333,12 +276,8 @@ async function verHistorialVehiculo(vehiculoId) {
   const saldoAcum = lista.reduce((s,c)=>s+Math.max(0,Number(c.total||0)-(pagosPorCot[c.id]||0)),0);
   const k = el("kpis-historial").querySelectorAll(".valor");
   k[0].textContent = lista.length; k[1].textContent = "$"+money(totalFact); k[2].textContent = "$"+money(saldoAcum);
-  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => {
-    const saldo = Math.max(0, Number(c.total||0)-(pagosPorCot[c.id]||0));
-    return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
-  }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
+  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => { const saldo = Math.max(0, Number(c.total||0)-(pagosPorCot[c.id]||0)); return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`; }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
-  // Historial de placas del auto (V6)
   const { data: placas } = await sb.from("placas_historial").select("*").eq("vehiculo_id", vehiculoId).order("desde", { ascending: false });
   el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${p.placa}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?cot.folio:""}</strong> · ${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
@@ -346,7 +285,7 @@ async function verHistorialVehiculo(vehiculoId) {
 }
 
 // ============================================================================
-// CATÁLOGO DE SERVICIOS
+// CATÁLOGO DE SERVICIOS (tabla vieja "servicios")
 // ============================================================================
 async function cargarCatalogo(filtro = "") {
   const { data } = await sb.from("servicios").select("*, categorias(nombre)").order("nombre");
@@ -375,19 +314,12 @@ el("form-servicio").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   if (!esAdmin()) { mostrarMensaje("mensaje-servicio", "Solo un administrador puede modificar el catálogo.", "error"); return; }
   const id = el("servicio-id").value;
-  const registro = {
-    codigo: el("servicio-codigo").value.trim(), nombre: el("servicio-nombre").value.trim(),
-    categoria_id: el("servicio-categoria").value || null, unidad_medida: el("servicio-unidad").value.trim() || "servicio",
-    precio_venta: Number(el("servicio-precio").value || 0), costo_interno: el("servicio-costo").value ? Number(el("servicio-costo").value) : null,
-    impuesto: Number(el("servicio-impuesto").value || 0), estado: el("servicio-estado").value, descripcion: el("servicio-descripcion").value.trim() || null,
-  };
+  const registro = { codigo: el("servicio-codigo").value.trim(), nombre: el("servicio-nombre").value.trim(), categoria_id: el("servicio-categoria").value || null, unidad_medida: el("servicio-unidad").value.trim() || "servicio", precio_venta: Number(el("servicio-precio").value || 0), costo_interno: el("servicio-costo").value ? Number(el("servicio-costo").value) : null, impuesto: Number(el("servicio-impuesto").value || 0), estado: el("servicio-estado").value, descripcion: el("servicio-descripcion").value.trim() || null };
   let error;
   if (id) { ({ error } = await sb.from("servicios").update(registro).eq("id", id)); if (!error) await registrarBitacora("servicios", id, "actualizar", null, registro); }
   else { const { data, error: e2 } = await sb.from("servicios").insert(registro).select().single(); error = e2; if (!error) await registrarBitacora("servicios", data.id, "crear", null, registro); }
   if (error) { mostrarMensaje("mensaje-servicio", "Error al guardar: " + error.message, "error"); return; }
-  cerrarModal("modal-servicio");
-  await cargarDatosBase();
-  cargarCatalogo();
+  cerrarModal("modal-servicio"); await cargarDatosBase(); cargarCatalogo();
 });
 
 // ============================================================================
@@ -398,10 +330,7 @@ async function cargarCotizaciones() {
   const cots = data || [];
   const ids = cots.map(c => c.id);
   let pagosPorCot = {};
-  if (ids.length) {
-    const { data: pagos } = await sb.from("pagos").select("cotizacion_id, importe").in("cotizacion_id", ids).eq("estado", "valido");
-    (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id]||0) + Number(p.importe); });
-  }
+  if (ids.length) { const { data: pagos } = await sb.from("pagos").select("cotizacion_id, importe").in("cotizacion_id", ids).eq("estado", "valido"); (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id]||0) + Number(p.importe); }); }
   cots.forEach(c => { c._saldo = Math.max(0, Number(c.total||0) - (pagosPorCot[c.id]||0)); });
   aplicarFiltrosCotizaciones(cots);
 }
@@ -422,44 +351,33 @@ el("buscar-cotizacion").addEventListener("input", () => aplicarFiltrosCotizacion
 el("filtro-estado-comercial").addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 el("filtro-estado-pago")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 
-// --- Pestañas del modal (con recálculo del gate de guardado) ---
+// Pestañas del modal (recalcula gate)
 document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", () => {
   document.querySelectorAll(".pestana").forEach(x => x.classList.remove("activa"));
   p.classList.add("activa");
   ["datos","pagos","seguimiento","archivos"].forEach(n => el("pestana-"+n).style.display = n === p.dataset.pestana ? "block" : "none");
   actualizarGatePagos();
 }));
-
 el("btn-nueva-cotizacion").addEventListener("click", () => abrirCotizacion(null));
 
-// --- GATE: Pagos/Seguimiento/Archivos requieren cotización ya guardada ---
-// Muestra un aviso elegante y bloquea los botones hasta que exista la cotización.
+// GATE: Pagos/Seguimiento/Archivos requieren cotización guardada
 function actualizarGatePagos() {
-  const hayCotizacion = !!(el("cotizacion-id") && el("cotizacion-id").value);
+  const hay = !!(el("cotizacion-id") && el("cotizacion-id").value);
   const secciones = [
-    { pestana: "pestana-pagos",       boton: "btn-agregar-pago",       texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para poder registrar pagos." },
-    { pestana: "pestana-seguimiento", boton: "btn-agregar-seguimiento", texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para agregar seguimiento." },
-    { pestana: "pestana-archivos",    boton: "btn-subir-archivo",       texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para subir archivos." },
+    { pestana:"pestana-pagos", boton:"btn-agregar-pago", texto:"Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para poder registrar pagos." },
+    { pestana:"pestana-seguimiento", boton:"btn-agregar-seguimiento", texto:"Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para agregar seguimiento." },
+    { pestana:"pestana-archivos", boton:"btn-subir-archivo", texto:"Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para subir archivos." },
   ];
   secciones.forEach(s => {
     const cont = el(s.pestana);
-    if (cont) {
-      let banner = cont.querySelector(".aviso-guardar");
-      if (!banner) { banner = document.createElement("div"); banner.className = "aviso-guardar"; cont.insertBefore(banner, cont.firstChild); }
-      banner.innerHTML = `⚠️ ${s.texto}`;
-      banner.style.display = hayCotizacion ? "none" : "flex";
-    }
+    if (cont) { let b = cont.querySelector(".aviso-guardar"); if (!b) { b = document.createElement("div"); b.className = "aviso-guardar"; cont.insertBefore(b, cont.firstChild); } b.innerHTML = `⚠️ ${s.texto}`; b.style.display = hay ? "none" : "flex"; }
     const boton = el(s.boton);
-    if (boton) {
-      boton.disabled = !hayCotizacion;
-      boton.classList.toggle("btn-bloqueado", !hayCotizacion);
-      boton.title = hayCotizacion ? "" : "Primero guarda la cotización";
-    }
+    if (boton) { boton.disabled = !hay; boton.classList.toggle("btn-bloqueado", !hay); boton.title = hay ? "" : "Primero guarda la cotización"; }
   });
 }
 
 // ============================================================================
-// V6 · CLIENTE Y VEHÍCULO INLINE (dentro de la cotización)
+// V6 · CLIENTE Y VEHÍCULO INLINE
 // ============================================================================
 document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.addEventListener("change", () => {
   const nuevo = document.querySelector('input[name="modo-cliente"]:checked').value === "nuevo";
@@ -467,7 +385,6 @@ document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.addEventL
   el("cliente-modo-existente").style.display = nuevo ? "none" : "block";
   if (nuevo) { seleccion.clienteId = null; refrescarAutosDelCliente(); }
 }));
-
 let _debCliente;
 el("cliente-buscar").addEventListener("input", () => {
   clearTimeout(_debCliente);
@@ -489,7 +406,6 @@ el("cliente-buscar").addEventListener("input", () => {
     }));
   }, 250);
 });
-
 let _debTel;
 el("ncli-telefono").addEventListener("input", () => {
   clearTimeout(_debTel);
@@ -500,19 +416,10 @@ el("ncli-telefono").addEventListener("input", () => {
     const { data } = await sb.rpc("telefono_existente", { p_telefono: tel });
     if (data && data.length) {
       alerta.innerHTML = `<span style="color:var(--orange);">⚠ Ya existe <strong>${data[0].nombre_completo}</strong> con este teléfono. <a href="#" id="usar-existente">Usarlo</a></span>`;
-      el("usar-existente").addEventListener("click", (e) => {
-        e.preventDefault();
-        seleccion.clienteId = data[0].id;
-        document.querySelector('input[name="modo-cliente"][value="existente"]').checked = true;
-        el("cliente-modo-nuevo").style.display = "none"; el("cliente-modo-existente").style.display = "block";
-        el("cliente-elegido").style.display = "flex";
-        el("cliente-elegido").innerHTML = `✓ Cliente: <strong>${data[0].nombre_completo}</strong>`;
-        refrescarAutosDelCliente();
-      });
+      el("usar-existente").addEventListener("click", (e) => { e.preventDefault(); seleccion.clienteId = data[0].id; document.querySelector('input[name="modo-cliente"][value="existente"]').checked = true; el("cliente-modo-nuevo").style.display = "none"; el("cliente-modo-existente").style.display = "block"; el("cliente-elegido").style.display = "flex"; el("cliente-elegido").innerHTML = `✓ Cliente: <strong>${data[0].nombre_completo}</strong>`; refrescarAutosDelCliente(); });
     } else { alerta.innerHTML = `<span style="color:var(--green);">✓ Teléfono disponible.</span>`; }
   }, 300);
 });
-
 async function refrescarAutosDelCliente() {
   const sel = el("vehiculo-existente-select");
   if (!seleccion.clienteId) { sel.innerHTML = `<option value="">Primero elige un cliente…</option>`; return; }
@@ -521,18 +428,13 @@ async function refrescarAutosDelCliente() {
   sel.innerHTML = autos.length ? `<option value="">Selecciona un auto…</option>` + autos.map(v => `<option value="${v.id}">${v.placa} · ${v.marca} ${v.modelo} ${v.anio||""}${v.vin?" · VIN "+v.vin.slice(-6):""}</option>`).join("") : `<option value="">Este cliente no tiene autos — usa "Auto nuevo"</option>`;
 }
 el("vehiculo-existente-select").addEventListener("change", () => { seleccion.vehiculoId = el("vehiculo-existente-select").value || null; });
-
 document.querySelectorAll('input[name="modo-vehiculo"]').forEach(r => r.addEventListener("change", () => {
   const nuevo = document.querySelector('input[name="modo-vehiculo"]:checked').value === "nuevo";
   el("vehiculo-modo-nuevo").style.display = nuevo ? "block" : "none";
   el("vehiculo-modo-existente").style.display = nuevo ? "none" : "block";
   if (nuevo) { seleccion.vehiculoId = null; cargarAniosCotizacion(); }
 }));
-
-async function cargarAniosCotizacion() {
-  const { data } = await sb.rpc("autos_anios");
-  el("nveh-anio").innerHTML = `<option value="">—</option>` + (data||[]).map(a=>`<option>${a}</option>`).join("");
-}
+async function cargarAniosCotizacion() { const { data } = await sb.rpc("autos_anios"); el("nveh-anio").innerHTML = `<option value="">—</option>` + (data||[]).map(a=>`<option>${a}</option>`).join(""); }
 el("nveh-anio").addEventListener("change", async () => {
   ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
   if (!el("nveh-anio").value) return;
@@ -554,12 +456,7 @@ el("nveh-modelo").addEventListener("change", async () => {
   const { data: mot } = await sb.rpc("autos_motores", { ...base, p_version: "" });
   el("nveh-motor").innerHTML = `<option value="">—</option>` + (mot||[]).map(m=>`<option>${m}</option>`).join("");
 });
-el("nveh-manual").addEventListener("change", () => {
-  const on = el("nveh-manual").checked;
-  el("nveh-marca-manual").disabled = !on; el("nveh-modelo-manual").disabled = !on;
-  ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).disabled = on);
-});
-
+el("nveh-manual").addEventListener("change", () => { const on = el("nveh-manual").checked; el("nveh-marca-manual").disabled = !on; el("nveh-modelo-manual").disabled = !on; ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).disabled = on); });
 let _debVin;
 el("nveh-vin").addEventListener("input", () => {
   clearTimeout(_debVin);
@@ -570,30 +467,64 @@ el("nveh-vin").addEventListener("input", () => {
     const { data } = await sb.rpc("buscar_vehiculo", { p_texto: vin });
     if (data && data.length) {
       alerta.innerHTML = `<span style="color:var(--orange);">⚠ Este VIN ya existe (${data[0].marca} ${data[0].modelo}, placa ${data[0].placa}). <a href="#" id="usar-veh">Usar ese auto</a></span>`;
-      el("usar-veh").addEventListener("click", (e) => { e.preventDefault();
-        seleccion.vehiculoId = data[0].id;
-        document.querySelector('input[name="modo-vehiculo"][value="existente"]').checked = true;
-        el("vehiculo-modo-nuevo").style.display = "none"; el("vehiculo-modo-existente").style.display = "block";
-        if (!seleccion.clienteId && data[0].cliente_id) seleccion.clienteId = data[0].cliente_id;
-        refrescarAutosDelCliente().then(() => { el("vehiculo-existente-select").value = data[0].id; });
-      });
+      el("usar-veh").addEventListener("click", (e) => { e.preventDefault(); seleccion.vehiculoId = data[0].id; document.querySelector('input[name="modo-vehiculo"][value="existente"]').checked = true; el("vehiculo-modo-nuevo").style.display = "none"; el("vehiculo-modo-existente").style.display = "block"; if (!seleccion.clienteId && data[0].cliente_id) seleccion.clienteId = data[0].cliente_id; refrescarAutosDelCliente().then(() => { el("vehiculo-existente-select").value = data[0].id; }); });
     } else { alerta.innerHTML = `<span style="color:var(--green);">✓ VIN nuevo.</span>`; }
   }, 300);
 });
-
 function resetInlineCotizacion() {
   seleccion.clienteId = null; seleccion.vehiculoId = null;
   document.querySelector('input[name="modo-cliente"][value="existente"]').checked = true;
   document.querySelector('input[name="modo-vehiculo"][value="existente"]').checked = true;
   el("cliente-modo-nuevo").style.display = "none"; el("cliente-modo-existente").style.display = "block";
   el("vehiculo-modo-nuevo").style.display = "none"; el("vehiculo-modo-existente").style.display = "block";
-  el("cliente-buscar").value = ""; el("cliente-elegido").style.display = "none";
-  el("cliente-sugerencias").classList.remove("activo");
+  el("cliente-buscar").value = ""; el("cliente-elegido").style.display = "none"; el("cliente-sugerencias").classList.remove("activo");
   ["ncli-nombre","ncli-telefono","ncli-correo","ncli-rfc","ncli-direccion","ncli-obs","nveh-vin","nveh-placa","nveh-color","nveh-km","nveh-marca-manual","nveh-modelo-manual"].forEach(i=>el(i).value="");
   el("ncli-tel-alerta").textContent = ""; el("nveh-vin-alerta").textContent = "";
   el("vehiculo-existente-select").innerHTML = `<option value="">Primero elige un cliente…</option>`;
   if (el("nveh-manual")) el("nveh-manual").checked = false;
 }
+
+// ============================================================================
+// V8 · CASCADA DEL CATÁLOGO MAESTRO EN LA COTIZACIÓN
+// ============================================================================
+function tipoCatalogoARenglon(tipoCat) {
+  if (tipoCat === "CONCEPTO_MANO_OBRA") return "mano_obra";
+  if (tipoCat === "CONCEPTO_REFACCION") return "refaccion_libre";
+  return "servicio";
+}
+async function cargarCategoriasCotizacion() {
+  const { data } = await sb.rpc("cat_categorias");
+  el("cat-cot-categoria").innerHTML = `<option value="">Selecciona…</option>` + (data||[]).map(c=>`<option value="${c.codigo}">${c.nombre}</option>`).join("");
+  el("cat-cot-concepto").innerHTML = `<option value="">Primero elige categoría…</option>`;
+}
+el("cat-cot-categoria")?.addEventListener("change", async () => {
+  const cat = el("cat-cot-categoria").value;
+  const sel = el("cat-cot-concepto");
+  if (!cat) { sel.innerHTML = `<option value="">Primero elige categoría…</option>`; return; }
+  if (cat === "COM") {
+    const { data } = await sb.rpc("cat_combos");
+    sel.innerHTML = `<option value="">Selecciona un combo…</option>` + (data||[]).map(c=>`<option value="COMBO::${c.codigo}">${c.nombre}</option>`).join("");
+  } else {
+    const { data } = await sb.rpc("cat_conceptos", { p_categoria: cat });
+    sel.innerHTML = `<option value="">Selecciona un concepto…</option>` + (data||[]).map(c=>`<option value="CONCEPTO::${c.codigo}::${c.tipo}::${(c.nombre||'').replace(/"/g,'')}">${c.nombre}</option>`).join("");
+  }
+});
+el("btn-cat-agregar")?.addEventListener("click", async () => {
+  const val = el("cat-cot-concepto").value;
+  if (!val) { mostrarMensaje("mensaje-cotizacion", "Elige un concepto o combo primero.", "error"); return; }
+  if (val.startsWith("COMBO::")) {
+    const codigo = val.split("::")[1];
+    const { data } = await sb.rpc("expandir_combo", { p_combo_codigo: codigo });
+    if (!data || !data.length) { mostrarMensaje("mensaje-cotizacion", "Ese combo no tiene conceptos.", "error"); return; }
+    data.forEach(item => estado.conceptosEnEdicion.push({ tipo: tipoCatalogoARenglon(item.tipo), descripcion: item.nombre, cantidad: item.cantidad || 1, precio_unitario: 0, descuento: 0, importe: 0 }));
+    mostrarMensaje("mensaje-cotizacion", `Combo agregado: ${data.length} concepto(s). Captura los precios.`);
+  } else if (val.startsWith("CONCEPTO::")) {
+    const [, , tipoCat, nombre] = val.split("::");
+    estado.conceptosEnEdicion.push({ tipo: tipoCatalogoARenglon(tipoCat), descripcion: nombre, cantidad: 1, precio_unitario: 0, descuento: 0, importe: 0 });
+  }
+  renderConceptos();
+  el("cat-cot-concepto").value = "";
+});
 
 // ============================================================================
 // COTIZACIÓN · abrir / conceptos / guardar
@@ -626,7 +557,6 @@ async function abrirCotizacion(id) {
     el("cotizacion-fecha-compromiso").value = c.fecha_compromiso_pago || "";
     el("campos-adeudo").style.display = c.cerrada_con_adeudo ? "block" : "none";
     actualizarVisibilidadPanelCierre();
-    // Precargar cliente/vehículo en la selección inline
     seleccion.clienteId = c.cliente_id; seleccion.vehiculoId = c.vehiculo_id;
     const cli = estado.clientes.find(x => x.id === c.cliente_id);
     el("cliente-elegido").style.display = "flex";
@@ -640,25 +570,25 @@ async function abrirCotizacion(id) {
     await cargarSeguimientoCotizacion(id);
   }
   renderConceptos();
-  actualizarGatePagos();   // refresca el gate según haya o no cotización
+  cargarCategoriasCotizacion();   // V8 · llena el selector de categorías
+  actualizarGatePagos();
   abrirModal("modal-cotizacion");
 }
-
 function renderConceptos() {
   el("cuerpo-conceptos").innerHTML = estado.conceptosEnEdicion.map((cpt, i) => `
     <tr>
-      <td><select data-campo="tipo" data-i="${i}">${["servicio","mano_obra","consumible","refaccion_libre","descuento","nota"].map(t=>`<option value="${t}" ${cpt.tipo===t?"selected":""}>${t.replace("_"," ")}</option>`).join("")}</select></td>
+      <td><select data-campo="tipo" data-i="${i}">${[["servicio","Servicio"],["mano_obra","Mano de obra"],["consumible","Consumible"],["refaccion_libre","Refacción"],["descuento","Descuento"],["nota","Nota"]].map(([v,txt])=>`<option value="${v}" ${cpt.tipo===v?"selected":""}>${txt}</option>`).join("")}</select></td>
       <td><input data-campo="descripcion" data-i="${i}" value="${cpt.descripcion||""}"></td>
       <td><input type="number" step="1" min="1" data-campo="cantidad" data-i="${i}" value="${cpt.cantidad||1}"></td>
-      <td><input type="number" step="0.01" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
-      <td><input type="number" step="0.01" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
+      <td><input type="number" step="1" min="0" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
+      <td><input type="number" step="1" min="0" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
       <td data-importe-i="${i}">$${money(cpt.importe||0)}</td>
       <td><button type="button" class="btn secundario pequeno" data-quitar="${i}">×</button></td>
     </tr>`).join("");
   el("cuerpo-conceptos").querySelectorAll("[data-campo]").forEach(input => input.addEventListener("input", () => {
     const i = Number(input.dataset.i), campo = input.dataset.campo;
     if (campo === "cantidad") estado.conceptosEnEdicion[i][campo] = Math.max(1, Math.floor(Number(input.value||1)));
-    else if (["precio_unitario","descuento"].includes(campo)) estado.conceptosEnEdicion[i][campo] = Number(input.value||0);
+    else if (["precio_unitario","descuento"].includes(campo)) estado.conceptosEnEdicion[i][campo] = Math.max(0, Math.floor(Number(input.value||0)));
     else estado.conceptosEnEdicion[i][campo] = input.value;
     recalcularConcepto(i);
   }));
@@ -684,7 +614,6 @@ el("btn-agregar-concepto").addEventListener("click", () => { estado.conceptosEnE
 function actualizarVisibilidadPanelCierre() { el("panel-cierre").style.display = el("cotizacion-estado-comercial").value === "cerrada" ? "block" : "none"; }
 el("cotizacion-estado-comercial").addEventListener("change", actualizarVisibilidadPanelCierre);
 el("cotizacion-cerrar-adeudo").addEventListener("change", () => { el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none"; });
-
 function validarReglasDeCierre(saldoActual) {
   if (el("cotizacion-estado-comercial").value !== "cerrada") return null;
   if (el("cotizacion-estado-servicio").value !== "vehiculo_entregado") return "No se puede cerrar: el estado de servicio debe ser 'Vehículo entregado'.";
@@ -694,9 +623,7 @@ function validarReglasDeCierre(saldoActual) {
   else { if (!esAdmin()) return "Cerrar con adeudo requiere autorización de un administrador."; if (!el("cotizacion-motivo-adeudo").value.trim()) return "Cerrar con adeudo requiere un motivo."; if (!el("cotizacion-fecha-compromiso").value) return "Cerrar con adeudo requiere fecha compromiso."; }
   return null;
 }
-
 el("btn-guardar-cotizacion").addEventListener("click", async () => {
-  // ---- V6 · Resolver cliente y vehículo (existente o nuevo) ----
   const modoCli = document.querySelector('input[name="modo-cliente"]:checked').value;
   const modoVeh = document.querySelector('input[name="modo-vehiculo"]:checked').value;
   if (modoCli === "existente" && !seleccion.clienteId) { mostrarMensaje("mensaje-cotizacion", "Selecciona o crea un cliente.", "error"); return; }
@@ -708,52 +635,26 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
 
   const { data: resuelto, error: errR } = await sb.rpc("resolver_cliente_vehiculo", {
     p_cliente_id: modoCli === "existente" ? seleccion.clienteId : null,
-    p_cli_nombre: el("ncli-nombre").value, p_cli_telefono: el("ncli-telefono").value,
-    p_cli_correo: el("ncli-correo").value, p_cli_rfc: el("ncli-rfc").value,
-    p_cli_direccion: el("ncli-direccion").value, p_cli_obs: el("ncli-obs").value,
+    p_cli_nombre: el("ncli-nombre").value, p_cli_telefono: el("ncli-telefono").value, p_cli_correo: el("ncli-correo").value, p_cli_rfc: el("ncli-rfc").value, p_cli_direccion: el("ncli-direccion").value, p_cli_obs: el("ncli-obs").value,
     p_vehiculo_id: modoVeh === "existente" ? seleccion.vehiculoId : null,
-    p_veh_vin: el("nveh-vin").value, p_veh_placa: el("nveh-placa").value,
-    p_veh_marca: marca, p_veh_modelo: modelo,
-    p_veh_anio: el("nveh-anio").value ? Number(el("nveh-anio").value) : null,
-    p_veh_version: el("nveh-version").value, p_veh_motor: el("nveh-motor").value,
-    p_veh_color: el("nveh-color").value, p_veh_km: el("nveh-km").value ? Number(el("nveh-km").value) : null,
+    p_veh_vin: el("nveh-vin").value, p_veh_placa: el("nveh-placa").value, p_veh_marca: marca, p_veh_modelo: modelo, p_veh_anio: el("nveh-anio").value ? Number(el("nveh-anio").value) : null, p_veh_version: el("nveh-version").value, p_veh_motor: el("nveh-motor").value, p_veh_color: el("nveh-color").value, p_veh_km: el("nveh-km").value ? Number(el("nveh-km").value) : null,
   });
   if (errR || !resuelto || !resuelto.length) { mostrarMensaje("mensaje-cotizacion", "Error al resolver cliente/vehículo: " + (errR?.message || ""), "error"); return; }
   const clienteId = resuelto[0].cliente_id;
   const vehiculoId = resuelto[0].vehiculo_id;
-
-  if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) {
-    await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
-  }
+  if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
 
   const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.cantidad||0)*(c.precio_unitario||0),0);
   const descuento = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.descuento||0),0);
   const total = Math.max(0, subtotal - descuento);
-
   let saldoActual = total;
   const idExistente = el("cotizacion-id").value;
-  if (idExistente) {
-    const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido");
-    saldoActual = Math.max(0, total - (pv||[]).reduce((s,p)=>s+Number(p.importe),0));
-  }
+  if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, total - (pv||[]).reduce((s,p)=>s+Number(p.importe),0)); }
   const errCierre = validarReglasDeCierre(saldoActual);
   if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
 
   const conAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
-  const encabezado = {
-    cliente_id: clienteId, vehiculo_id: vehiculoId,
-    entrega_estimada: el("cotizacion-entrega").value || null,
-    kilometraje_visita: el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null,
-    observaciones: el("cotizacion-observaciones").value.trim() || null,
-    estado_comercial: el("cotizacion-estado-comercial").value,
-    estado_servicio: el("cotizacion-estado-servicio").value,
-    estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"),
-    subtotal, descuento_total: descuento, total,
-    notas_finales: el("cotizacion-notas-finales").value.trim() || null,
-    cerrada_con_adeudo: conAdeudo,
-    motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null,
-    fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null,
-  };
+  const encabezado = { cliente_id: clienteId, vehiculo_id: vehiculoId, entrega_estimada: el("cotizacion-entrega").value || null, kilometraje_visita: el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null, observaciones: el("cotizacion-observaciones").value.trim() || null, estado_comercial: el("cotizacion-estado-comercial").value, estado_servicio: el("cotizacion-estado-servicio").value, estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"), subtotal, descuento_total: descuento, total, notas_finales: el("cotizacion-notas-finales").value.trim() || null, cerrada_con_adeudo: conAdeudo, motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null, fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null };
 
   let id = el("cotizacion-id").value;
   if (!id) {
@@ -761,24 +662,18 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
     encabezado.folio = folio; encabezado.usuario_responsable = estado.usuario.id; encabezado.created_by = estado.usuario.id;
     const { data, error } = await sb.from("cotizaciones").insert(encabezado).select().single();
     if (error) { mostrarMensaje("mensaje-cotizacion", "Error al crear: " + error.message, "error"); return; }
-    id = data.id; el("cotizacion-id").value = id;
-    el("titulo-modal-cotizacion").textContent = data.folio || "Cotización";
+    id = data.id; el("cotizacion-id").value = id; el("titulo-modal-cotizacion").textContent = data.folio || "Cotización";
     await registrarBitacora("cotizaciones", id, "crear", null, encabezado);
   } else {
     const { error } = await sb.from("cotizaciones").update(encabezado).eq("id", id);
     if (error) { mostrarMensaje("mensaje-cotizacion", "Error al actualizar: " + error.message, "error"); return; }
     await registrarBitacora("cotizaciones", id, "actualizar", null, encabezado);
   }
-
   await sb.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
-  if (estado.conceptosEnEdicion.length) {
-    const filas = estado.conceptosEnEdicion.map(c => ({ cotizacion_id: id, tipo: c.tipo, descripcion: c.descripcion, cantidad: c.cantidad || 1, precio_unitario: c.precio_unitario || 0, descuento: c.descuento || 0, importe: c.importe || 0 }));
-    await sb.from("detalle_cotizacion").insert(filas);
-  }
-  actualizarGatePagos();  // ahora ya hay cotización → habilita pagos/seguimiento/archivos
+  if (estado.conceptosEnEdicion.length) { const filas = estado.conceptosEnEdicion.map(c => ({ cotizacion_id: id, tipo: c.tipo, descripcion: c.descripcion, cantidad: c.cantidad || 1, precio_unitario: c.precio_unitario || 0, descuento: c.descuento || 0, importe: c.importe || 0 })); await sb.from("detalle_cotizacion").insert(filas); }
+  actualizarGatePagos();
   mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
-  await cargarDatosBase();
-  await cargarCotizaciones();
+  await cargarDatosBase(); await cargarCotizaciones();
 });
 
 // --- Pagos ---
@@ -789,12 +684,7 @@ async function cargarPagosCotizacion(cotizacionId) {
   const saldo = (cot ? cot.total : 0) - validos.reduce((s,p)=>s+Number(p.importe),0);
   el("cotizacion-saldo").textContent = money(saldo);
   el("tabla-pagos-cotizacion").innerHTML = (pagos||[]).map(p => `<tr><td>${p.fecha}</td><td>$${money(p.importe)}</td><td>${p.metodo}</td><td>${p.referencia||"—"}</td><td>${p.estado}</td><td>${p.estado==='valido'&&esAdmin()?`<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>`:""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin pagos registrados.</td></tr>`;
-  document.querySelectorAll("[data-reversar]").forEach(b => b.addEventListener("click", async () => {
-    const motivo = prompt("Motivo de la reversión (obligatorio):"); if (!motivo) return;
-    await sb.from("pagos").update({ estado:"reversado" }).eq("id", b.dataset.reversar);
-    await registrarBitacora("pagos", b.dataset.reversar, "reversar", null, { motivo });
-    cargarPagosCotizacion(cotizacionId);
-  }));
+  document.querySelectorAll("[data-reversar]").forEach(b => b.addEventListener("click", async () => { const motivo = prompt("Motivo de la reversión (obligatorio):"); if (!motivo) return; await sb.from("pagos").update({ estado:"reversado" }).eq("id", b.dataset.reversar); await registrarBitacora("pagos", b.dataset.reversar, "reversar", null, { motivo }); cargarPagosCotizacion(cotizacionId); }));
 }
 el("btn-agregar-pago").addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
@@ -818,8 +708,7 @@ el("btn-agregar-seguimiento").addEventListener("click", async () => {
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de agregar seguimiento.", "error"); return; }
   if (!texto) return;
   await sb.from("seguimientos").insert({ cotizacion_id: id, descripcion: texto, usuario_id: estado.usuario.id, tipo: "nota" });
-  el("seguimiento-texto").value = "";
-  cargarSeguimientoCotizacion(id);
+  el("seguimiento-texto").value = ""; cargarSeguimientoCotizacion(id);
 });
 
 // ============================================================================
@@ -867,11 +756,7 @@ function parseCSV(texto) { return texto.trim().split(/\r?\n/).map(l => l.split("
 async function cargarArchivosCotizacion(cotizacionId) {
   const { data } = await sb.from("archivos_adjuntos").select("*").eq("cotizacion_id", cotizacionId).order("created_at", { ascending: false });
   const lista = data || [];
-  el("galeria-archivos").innerHTML = lista.length ? lista.map(a => {
-    const url = sb.storage.from("evidencias").getPublicUrl(a.storage_path).data.publicUrl;
-    const esImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(a.nombre_archivo);
-    return `<a href="${url}" target="_blank" class="archivo-item">${esImg?`<img src="${url}" alt="${a.nombre_archivo}">`:`<div class="archivo-generico">Archivo</div>`}<small>${a.tipo||"otro"}</small><small>${a.nombre_archivo}</small></a>`;
-  }).join("") : `<div class="vacio-tabla">Sin archivos todavía.</div>`;
+  el("galeria-archivos").innerHTML = lista.length ? lista.map(a => { const url = sb.storage.from("evidencias").getPublicUrl(a.storage_path).data.publicUrl; const esImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(a.nombre_archivo); return `<a href="${url}" target="_blank" class="archivo-item">${esImg?`<img src="${url}" alt="${a.nombre_archivo}">`:`<div class="archivo-generico">Archivo</div>`}<small>${a.tipo||"otro"}</small><small>${a.nombre_archivo}</small></a>`; }).join("") : `<div class="vacio-tabla">Sin archivos todavía.</div>`;
 }
 el("btn-subir-archivo").addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
@@ -941,7 +826,7 @@ async function generarPDFCotizacion(cotizacionId) {
 }
 
 // ============================================================================
-// USUARIOS (V3 + V4)
+// USUARIOS (V3 + V4 + V7)
 // ============================================================================
 let _listaUsuarios = [];
 async function cargarUsuarios(filtro = "") {
@@ -960,7 +845,6 @@ function renderTablaUsuarios(filtro = "") {
 }
 el("buscar-usuario").addEventListener("input", e => renderTablaUsuarios(e.target.value));
 el("btn-refrescar-usuarios").addEventListener("click", () => cargarUsuarios(el("buscar-usuario").value));
-
 function abrirModalUsuario(u) {
   el("titulo-modal-usuario").textContent = u && u.nombre_completo ? `Perfil de ${u.nombre_completo}` : "Configurar perfil";
   el("usuario-id").value = u ? u.id : "";
@@ -1005,8 +889,7 @@ el("btn-guardar-usuario").addEventListener("click", async () => {
   mostrarMensaje("mensaje-usuario", "Perfil guardado correctamente.");
   cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
 });
-
-// V7 · Restablecer contraseña (vía Edge Function segura)
+// V7 · Restablecer contraseña
 el("btn-reset-password")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
   const password = el("usuario-password").value;
@@ -1014,18 +897,13 @@ el("btn-reset-password")?.addEventListener("click", async () => {
   if (!password || password.length < 6) { mostrarMensaje("mensaje-usuario", "La contraseña debe tener al menos 6 caracteres.", "error"); return; }
   mostrarMensaje("mensaje-usuario", "Actualizando contraseña…");
   const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "cambiar_password", usuario_id: id, password } });
-  if (error) {
-    let detalle = error.message;
-    try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); detalle = c.mensaje || c.error || detalle; } } catch(_) {}
-    mostrarMensaje("mensaje-usuario", "Error: " + detalle, "error"); return;
-  }
+  if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-usuario", "Error: " + d, "error"); return; }
   if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
   await registrarBitacora("perfiles", id, "cambiar_password", null, { por: estado.usuario.id });
   el("usuario-password").value = "";
   mostrarMensaje("mensaje-usuario", "Contraseña actualizada correctamente.");
 });
-
-// V7 · Eliminar usuario (vía Edge Function segura)
+// V7 · Eliminar usuario
 el("btn-eliminar-usuario")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
   const nombre = el("usuario-nombre").value || "este usuario";
@@ -1034,16 +912,11 @@ el("btn-eliminar-usuario")?.addEventListener("click", async () => {
   if (!confirm(`¿Seguro que deseas ELIMINAR a "${nombre}"? Esta acción no se puede deshacer.`)) return;
   mostrarMensaje("mensaje-usuario", "Eliminando usuario…");
   const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "eliminar", usuario_id: id } });
-  if (error) {
-    let detalle = error.message;
-    try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); detalle = c.mensaje || c.error || detalle; } } catch(_) {}
-    mostrarMensaje("mensaje-usuario", "Error: " + detalle, "error"); return;
-  }
+  if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-usuario", "Error: " + d, "error"); return; }
   if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
   await registrarBitacora("perfiles", id, "eliminar_usuario", null, { nombre });
   cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
 });
-
 async function generarUsernameDesde(nombreCompleto) {
   const partes = nombreCompleto.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/\s+/).filter(Boolean);
   if (partes.length < 2) return null;
@@ -1089,11 +962,7 @@ el("btn-confirmar-crear-usuario")?.addEventListener("click", async () => {
   if (!disp) { mostrarMensaje("mensaje-crear-usuario", "Ese usuario ya está en uso.", "error"); return; }
   mostrarMensaje("mensaje-crear-usuario", "Creando usuario…");
   const { data, error } = await sb.functions.invoke("crear-usuario", { body: { correo, password, nombre_completo: nombre, username, rol } });
-  if (error) {
-    let detalle = error.message;
-    try { if (error.context && typeof error.context.json === "function") { const cuerpo = await error.context.json(); detalle = cuerpo.mensaje || cuerpo.error || detalle; } } catch(_) {}
-    mostrarMensaje("mensaje-crear-usuario", "Error: " + detalle, "error"); return;
-  }
+  if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-crear-usuario", "Error: " + d, "error"); return; }
   if (data && (data.error || data.ok === false)) { mostrarMensaje("mensaje-crear-usuario", "Error: " + (data.error || data.mensaje), "error"); return; }
   await registrarBitacora("perfiles", data.id, "crear_usuario", null, { username, rol });
   mostrarMensaje("mensaje-crear-usuario", `Usuario @${username} creado correctamente.`);
@@ -1107,3 +976,48 @@ async function cargarBitacora() {
   const { data } = await sb.from("bitacora").select("*").order("created_at", { ascending: false }).limit(100);
   el("tabla-bitacora").innerHTML = (data||[]).map(b => `<tr><td>${new Date(b.created_at).toLocaleString("es-MX")}</td><td>${b.tabla_afectada}</td><td>${b.accion}</td><td>${b.valores_nuevos?JSON.stringify(b.valores_nuevos).slice(0,120):"—"}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio-tabla">Sin actividad registrada.</td></tr>`;
 }
+
+// ============================================================================
+// V8 · CREACIÓN DE COMBOS (panel en el módulo Catálogo)
+// ============================================================================
+let _comboItems = [];
+el("btn-nuevo-combo")?.addEventListener("click", async () => {
+  if (!puedeEscribir()) { alert("No tienes permiso para crear combos."); return; }
+  el("combo-nombre").value = ""; _comboItems = []; renderComboItems();
+  const { data } = await sb.rpc("cat_categorias");
+  el("combo-cat").innerHTML = `<option value="">Selecciona…</option>` + (data||[]).filter(c=>c.codigo!=="COM").map(c=>`<option value="${c.codigo}">${c.nombre}</option>`).join("");
+  el("combo-concepto").innerHTML = `<option value="">Primero elige categoría…</option>`;
+  abrirModal("modal-combo");
+});
+el("combo-cat")?.addEventListener("change", async () => {
+  const cat = el("combo-cat").value;
+  const sel = el("combo-concepto");
+  if (!cat) { sel.innerHTML = `<option value="">Primero elige categoría…</option>`; return; }
+  const { data } = await sb.rpc("cat_conceptos", { p_categoria: cat });
+  sel.innerHTML = `<option value="">Selecciona un concepto…</option>` + (data||[]).map(c=>`<option value="${c.codigo}::${c.tipo}::${(c.nombre||'').replace(/"/g,'')}">${c.nombre}</option>`).join("");
+});
+el("btn-combo-add-item")?.addEventListener("click", () => {
+  const val = el("combo-concepto").value;
+  const cant = Math.max(1, Math.floor(Number(el("combo-cantidad").value || 1)));
+  if (!val) { mostrarMensaje("mensaje-combo", "Elige un concepto.", "error"); return; }
+  const [codigo, tipo, nombre] = val.split("::");
+  if (_comboItems.some(x => x.codigo === codigo)) { mostrarMensaje("mensaje-combo", "Ese concepto ya está en el combo.", "error"); return; }
+  _comboItems.push({ codigo, tipo, nombre, cantidad: cant });
+  el("combo-cantidad").value = 1; renderComboItems();
+});
+function renderComboItems() {
+  const TIPOS = { CONCEPTO_REFACCION:"Refacción", CONCEPTO_SERVICIO:"Servicio", CONCEPTO_MANO_OBRA:"Mano de obra" };
+  el("combo-lista-items").innerHTML = _comboItems.length ? _comboItems.map((x,i)=>`<tr><td>${x.nombre}</td><td>${TIPOS[x.tipo]||x.tipo}</td><td>${x.cantidad}</td><td><button type="button" class="btn secundario pequeno" data-quitar-combo="${i}">×</button></td></tr>`).join("") : `<tr><td colspan="4" class="vacio-tabla">Aún no agregas conceptos.</td></tr>`;
+  document.querySelectorAll("[data-quitar-combo]").forEach(b => b.addEventListener("click", () => { _comboItems.splice(Number(b.dataset.quitarCombo),1); renderComboItems(); }));
+}
+el("btn-guardar-combo")?.addEventListener("click", async () => {
+  const nombre = el("combo-nombre").value.trim();
+  if (!nombre) { mostrarMensaje("mensaje-combo", "El combo necesita un nombre.", "error"); return; }
+  if (!_comboItems.length) { mostrarMensaje("mensaje-combo", "Agrega al menos un concepto.", "error"); return; }
+  const detalles = _comboItems.map(x => ({ concepto_codigo: x.codigo, cantidad: x.cantidad }));
+  const { data, error } = await sb.rpc("crear_combo", { p_nombre: nombre, p_detalles: detalles });
+  if (error) { mostrarMensaje("mensaje-combo", "Error: " + error.message, "error"); return; }
+  await registrarBitacora("catalogo_maestro", null, "crear_combo", null, { combo: data, nombre, items: _comboItems.length });
+  mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
+  setTimeout(() => cerrarModal("modal-combo"), 1200);
+});
