@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-<!-- ======================= PANTALLA DE LOGIN ======================= -->
+<!-- ======================= LOGIN ======================= -->
 <div id="pantalla-login">
   <div class="login-card">
     <h1>Sistema Taller Automotriz</h1>
@@ -22,10 +22,10 @@
     </form>
   </div>
 </div>
-<!-- ======================= APP PRINCIPAL ======================= -->
+<!-- ======================= APP ======================= -->
 <div id="app-shell">
   <nav id="nav-lateral">
-    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V6</small></div>
+    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V8</small></div>
     <a class="nav-item activo" data-modulo="inicio">Inicio</a>
     <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
     <a class="nav-item" data-modulo="clientes">Clientes</a>
@@ -41,11 +41,9 @@
     </div>
   </nav>
   <main id="contenido">
-    <!-- ---------------- INICIO / DASHBOARD ---------------- -->
+    <!-- INICIO -->
     <section class="modulo activo" id="modulo-inicio">
-      <div class="encabezado-modulo">
-        <div><h2>Panel operativo</h2><p>Vista general del taller</p></div>
-      </div>
+      <div class="encabezado-modulo"><div><h2>Panel operativo</h2><p>Vista general del taller</p></div></div>
       <div class="kpis" id="kpis-inicio">
         <div class="kpi"><div class="valor">—</div><div class="etiqueta">Cotizaciones abiertas</div></div>
         <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Pendientes de autorización</div></div>
@@ -60,7 +58,7 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- COTIZACIONES ---------------- -->
+    <!-- COTIZACIONES -->
     <section class="modulo" id="modulo-cotizaciones">
       <div class="encabezado-modulo">
         <div><h2>Cotizaciones</h2><p>Ciclo completo: crear, autorizar, dar seguimiento y cerrar</p></div>
@@ -92,15 +90,13 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- CLIENTES ---------------- -->
+    <!-- CLIENTES -->
     <section class="modulo" id="modulo-clientes">
       <div class="encabezado-modulo">
         <div><h2>Clientes</h2><p>Alta, edición y consulta</p></div>
         <button class="btn solo-staff" id="btn-nuevo-cliente">+ Nuevo cliente</button>
       </div>
-      <div class="barra-acciones">
-        <input type="search" id="buscar-cliente" placeholder="Buscar por nombre, teléfono o correo…">
-      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-cliente" placeholder="Buscar por nombre, teléfono o correo…"></div>
       <div class="panel">
         <table class="tabla">
           <thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Vehículos</th><th></th></tr></thead>
@@ -108,15 +104,13 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- VEHÍCULOS / HISTORIAL ---------------- -->
+    <!-- VEHÍCULOS -->
     <section class="modulo" id="modulo-vehiculos">
       <div class="encabezado-modulo">
         <div><h2>Vehículos e historial</h2><p>Busca por placa, VIN, marca o modelo</p></div>
         <button class="btn solo-staff" id="btn-nuevo-vehiculo">+ Nuevo vehículo</button>
       </div>
-      <div class="barra-acciones">
-        <input type="search" id="buscar-vehiculo" placeholder="Buscar por placa, VIN, marca o modelo…">
-      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-vehiculo" placeholder="Buscar por placa, VIN, marca o modelo…"></div>
       <div class="panel">
         <table class="tabla">
           <thead><tr><th>Placa</th><th>VIN</th><th>Marca / Modelo</th><th>Año</th><th>Cliente</th><th>Km</th><th></th></tr></thead>
@@ -124,15 +118,16 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- CATÁLOGO ---------------- -->
+    <!-- CATÁLOGO -->
     <section class="modulo" id="modulo-catalogo">
       <div class="encabezado-modulo">
-        <div><h2>Catálogo de servicios</h2><p>Servicios, mano de obra, consumibles y paquetes</p></div>
-        <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo servicio</button>
+        <div><h2>Catálogo de servicios</h2><p>Servicios, mano de obra, consumibles y combos</p></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo servicio</button>
+          <button class="btn secundario solo-staff" id="btn-nuevo-combo">🎁 Crear combo</button>
+        </div>
       </div>
-      <div class="barra-acciones">
-        <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
-      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…"></div>
       <div class="panel">
         <table class="tabla">
           <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Estado</th><th></th></tr></thead>
@@ -140,7 +135,7 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- IMPORTACIÓN ---------------- -->
+    <!-- IMPORTACIÓN -->
     <section class="modulo" id="modulo-importacion">
       <div class="encabezado-modulo">
         <div><h2>Importación masiva de servicios</h2><p>Sube un CSV con columnas: codigo, nombre, descripcion, categoria, unidad_medida, precio_venta, costo_interno, impuesto, estado, observaciones</p></div>
@@ -151,11 +146,9 @@
         <div id="previa-importacion"></div>
       </div>
     </section>
-    <!-- ---------------- USUARIOS ---------------- -->
+    <!-- USUARIOS -->
     <section class="modulo" id="modulo-usuarios">
-      <div class="encabezado-modulo">
-        <div><h2>Gestión de usuarios</h2><p>Crea y administra los accesos al sistema</p></div>
-      </div>
+      <div class="encabezado-modulo"><div><h2>Gestión de usuarios</h2><p>Crea y administra los accesos al sistema</p></div></div>
       <div class="barra-acciones">
         <input type="search" id="buscar-usuario" placeholder="Buscar por nombre o usuario…">
         <div class="spacer"></div>
@@ -169,11 +162,9 @@
         </table>
       </div>
     </section>
-    <!-- ---------------- BITÁCORA ---------------- -->
+    <!-- BITÁCORA -->
     <section class="modulo" id="modulo-bitacora">
-      <div class="encabezado-modulo">
-        <div><h2>Bitácora</h2><p>Acciones sensibles registradas por el sistema</p></div>
-      </div>
+      <div class="encabezado-modulo"><div><h2>Bitácora</h2><p>Acciones sensibles registradas por el sistema</p></div></div>
       <div class="panel">
         <table class="tabla">
           <thead><tr><th>Fecha</th><th>Tabla</th><th>Acción</th><th>Detalle</th></tr></thead>
@@ -213,7 +204,6 @@
     <h3 id="titulo-modal-vehiculo">Nuevo vehículo</h3>
     <form id="form-vehiculo">
       <input type="hidden" id="vehiculo-id">
-      <!-- Cascada de catálogo -->
       <div class="campo" style="grid-column:1/-1; margin-bottom:12px;">
         <label>Selecciona del catálogo (Año → Marca → Modelo → Versión → Motor)</label>
         <div class="form-grid">
@@ -223,7 +213,7 @@
           <div class="campo"><label>Versión (opcional)</label><select id="cat-version"><option value="">—</option></select></div>
           <div class="campo"><label>Motor (opcional)</label><select id="cat-motor"><option value="">—</option></select></div>
         </div>
-        <label class="hint"><input type="checkbox" id="cat-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar a mano (se agregará al catálogo)</label>
+        <label class="hint"><input type="checkbox" id="cat-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar a mano</label>
       </div>
       <div class="form-grid">
         <div class="campo"><label>Cliente *</label><select id="vehiculo-cliente" required></select></div>
@@ -271,7 +261,7 @@
     </form>
   </div>
 </div>
-<!-- ======================= MODAL: COTIZACIÓN (con captura inline V6) ======================= -->
+<!-- ======================= MODAL: COTIZACIÓN ======================= -->
 <div class="modal-fondo" id="modal-cotizacion">
   <div class="modal" style="max-width:900px;">
     <button class="cerrar" data-cerrar-modal="modal-cotizacion">×</button>
@@ -284,10 +274,9 @@
       <div class="pestana" data-pestana="archivos">Archivos</div>
     </div>
     <div class="vista-pestana" id="pestana-datos">
-      <!-- ===== CLIENTE inline ===== -->
+      <!-- CLIENTE inline -->
       <div class="bloque-inline">
-        <div class="bloque-titulo">
-          <span>Cliente *</span>
+        <div class="bloque-titulo"><span>Cliente *</span>
           <div class="toggle-modo">
             <label><input type="radio" name="modo-cliente" value="existente" checked> Buscar existente</label>
             <label><input type="radio" name="modo-cliente" value="nuevo"> Cliente nuevo</label>
@@ -309,10 +298,9 @@
           </div>
         </div>
       </div>
-      <!-- ===== VEHÍCULO inline ===== -->
+      <!-- VEHÍCULO inline -->
       <div class="bloque-inline">
-        <div class="bloque-titulo">
-          <span>Vehículo *</span>
+        <div class="bloque-titulo"><span>Vehículo *</span>
           <div class="toggle-modo">
             <label><input type="radio" name="modo-vehiculo" value="existente" checked> Auto del cliente</label>
             <label><input type="radio" name="modo-vehiculo" value="nuevo"> Auto nuevo</label>
@@ -331,9 +319,7 @@
             <div class="campo"><label>Modelo *</label><select id="nveh-modelo"><option value="">—</option></select></div>
             <div class="campo"><label>Versión (opcional)</label><select id="nveh-version"><option value="">—</option></select></div>
             <div class="campo"><label>Motor (opcional)</label><select id="nveh-motor"><option value="">—</option></select></div>
-            <div class="campo" style="grid-column:1/-1;">
-              <label class="hint"><input type="checkbox" id="nveh-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar marca/modelo a mano (se agrega al catálogo)</label>
-            </div>
+            <div class="campo" style="grid-column:1/-1;"><label class="hint"><input type="checkbox" id="nveh-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar marca/modelo a mano</label></div>
             <div class="campo"><label>Marca (manual)</label><input id="nveh-marca-manual" disabled></div>
             <div class="campo"><label>Modelo (manual)</label><input id="nveh-modelo-manual" disabled></div>
             <div class="campo"><label>VIN / NIV (identidad permanente)</label><input id="nveh-vin" placeholder="17 caracteres (recomendado)" autocomplete="off"><div id="nveh-vin-alerta" style="font-size:11px; margin-top:3px; min-height:14px;"></div></div>
@@ -341,10 +327,10 @@
             <div class="campo"><label>Color</label><input id="nveh-color"></div>
             <div class="campo"><label>Kilometraje</label><input type="number" id="nveh-km"></div>
           </div>
-          <small class="hint">💡 Si aún no tienes el VIN, deja el campo vacío: usaremos la placa de forma temporal y podrás agregar el VIN después sin perder el historial.</small>
+          <small class="hint">💡 Si aún no tienes el VIN, deja el campo vacío: usaremos la placa temporalmente y podrás agregar el VIN después sin perder el historial.</small>
         </div>
       </div>
-      <!-- ===== Datos de la visita ===== -->
+      <!-- Datos de la visita -->
       <div class="form-grid">
         <div class="campo"><label>Entrega estimada</label><input type="date" id="cotizacion-entrega"></div>
         <div class="campo"><label>Kilometraje de esta visita</label><input type="number" id="cotizacion-km"></div>
@@ -374,9 +360,7 @@
       <div class="panel" id="panel-cierre" style="box-shadow:none; border:1px solid var(--border); margin-top:14px; display:none;">
         <h3>Requisitos de cierre</h3>
         <div class="campo"><label>Notas finales (obligatorio para cerrar)</label><textarea id="cotizacion-notas-finales"></textarea></div>
-        <div class="campo" style="margin-top:10px;">
-          <label><input type="checkbox" id="cotizacion-cerrar-adeudo" style="width:auto; margin-right:6px;">Cerrar con adeudo (requiere permiso especial)</label>
-        </div>
+        <div class="campo" style="margin-top:10px;"><label><input type="checkbox" id="cotizacion-cerrar-adeudo" style="width:auto; margin-right:6px;">Cerrar con adeudo (requiere permiso especial)</label></div>
         <div id="campos-adeudo" style="display:none; margin-top:10px;">
           <div class="form-grid dos">
             <div class="campo"><label>Motivo del adeudo *</label><input id="cotizacion-motivo-adeudo"></div>
@@ -384,12 +368,22 @@
           </div>
         </div>
       </div>
+      <!-- V8 · Selector en cascada del catálogo maestro -->
+      <div class="bloque-inline" style="margin-top:18px;">
+        <div class="bloque-titulo"><span>Agregar desde el catálogo</span></div>
+        <div class="form-grid">
+          <div class="campo"><label>Paso 1 · Categoría</label><select id="cat-cot-categoria"><option value="">Selecciona…</option></select></div>
+          <div class="campo"><label>Paso 2 · Concepto o combo</label><select id="cat-cot-concepto"><option value="">Primero elige categoría…</option></select></div>
+        </div>
+        <button type="button" class="btn secundario pequeno solo-staff" id="btn-cat-agregar" style="margin-top:8px;">+ Agregar a la cotización</button>
+        <small class="hint">Al elegir un combo se insertan todos sus conceptos con precio $0 para que captures el importe. También puedes agregar conceptos manuales abajo.</small>
+      </div>
       <h3 style="margin-top:18px;">Conceptos</h3>
       <table class="detalle-items" id="tabla-conceptos">
         <thead><tr><th style="width:120px;">Tipo</th><th>Descripción</th><th style="width:70px;">Cant.</th><th style="width:100px;">Precio</th><th style="width:90px;">Desc.</th><th style="width:100px;">Importe</th><th></th></tr></thead>
         <tbody id="cuerpo-conceptos"></tbody>
       </table>
-      <button type="button" class="btn secundario pequeno solo-staff" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto</button>
+      <button type="button" class="btn secundario pequeno solo-staff" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto manual</button>
       <div class="totales-cotizacion">
         Subtotal: $<span id="cotizacion-subtotal">0.00</span><br>
         Descuento: $<span id="cotizacion-descuento">0.00</span><br>
@@ -408,13 +402,7 @@
         <div class="form-grid">
           <div class="campo"><label>Importe</label><input type="number" step="0.01" id="pago-importe"></div>
           <div class="campo"><label>Método</label>
-            <select id="pago-metodo">
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="deposito">Depósito</option>
-              <option value="otro">Otro</option>
-            </select>
+            <select id="pago-metodo"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
           </div>
           <div class="campo"><label>Referencia</label><input id="pago-referencia"></div>
           <div class="campo"><label>Comentario</label><input id="pago-comentario"></div>
@@ -428,9 +416,7 @@
       <div class="totales-cotizacion">Saldo pendiente: $<strong id="cotizacion-saldo">0.00</strong></div>
     </div>
     <div class="vista-pestana" id="pestana-seguimiento" style="display:none;">
-      <div class="form-grid">
-        <div class="campo" style="grid-column: 1 / -1;"><label>Nueva nota de seguimiento</label><textarea id="seguimiento-texto"></textarea></div>
-      </div>
+      <div class="form-grid"><div class="campo" style="grid-column:1/-1;"><label>Nueva nota de seguimiento</label><textarea id="seguimiento-texto"></textarea></div></div>
       <button type="button" class="btn pequeno solo-staff" id="btn-agregar-seguimiento" style="margin-top:8px;">Agregar al seguimiento</button>
       <ul class="linea-tiempo" id="lista-seguimiento" style="margin-top:16px;"></ul>
     </div>
@@ -439,13 +425,7 @@
         <h3>Subir evidencia</h3>
         <div class="form-grid">
           <div class="campo"><label>Tipo</label>
-            <select id="archivo-tipo">
-              <option value="recepcion">Recepción</option>
-              <option value="proceso">Proceso</option>
-              <option value="entrega">Entrega</option>
-              <option value="comprobante">Comprobante</option>
-              <option value="otro">Otro</option>
-            </select>
+            <select id="archivo-tipo"><option value="recepcion">Recepción</option><option value="proceso">Proceso</option><option value="entrega">Entrega</option><option value="comprobante">Comprobante</option><option value="otro">Otro</option></select>
           </div>
           <div class="campo"><label>Archivo (foto o documento)</label><input type="file" id="archivo-input" accept="image/*,.pdf"></div>
         </div>
@@ -456,42 +436,32 @@
     </div>
   </div>
 </div>
-<!-- ======================= MODAL: EDITAR PERFIL DE USUARIO ======================= -->
+<!-- ======================= MODAL: EDITAR PERFIL USUARIO ======================= -->
 <div class="modal-fondo" id="modal-usuario">
   <div class="modal" style="max-width:540px;">
     <button class="cerrar" data-cerrar-modal="modal-usuario">×</button>
     <h3 id="titulo-modal-usuario">Editar perfil de usuario</h3>
-    <div class="campo" style="margin-bottom:12px;">
-      <label>Correo (solo lectura — se gestiona en Supabase)</label>
-      <input id="usuario-correo-display" readonly style="background:#f4f6f8; color:var(--text-mute);">
-    </div>
+    <div class="campo" style="margin-bottom:12px;"><label>Correo (solo lectura — se gestiona en Supabase)</label><input id="usuario-correo-display" readonly style="background:#f4f6f8; color:var(--text-mute);"></div>
     <div class="form-grid dos">
       <div class="campo"><label>Nombre completo *</label><input id="usuario-nombre" placeholder="Ej. Ernesto Castillo Colin"></div>
       <div class="campo">
-        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — se usa para iniciar sesión</span></label>
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — para iniciar sesión</span></label>
         <div style="display:flex; gap:6px; align-items:center;">
           <input id="usuario-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
-          <button type="button" class="btn secundario pequeno" id="btn-generar-username" title="Generar automáticamente desde el nombre">✦ Generar</button>
+          <button type="button" class="btn secundario pequeno" id="btn-generar-username" title="Generar desde el nombre">✦ Generar</button>
         </div>
         <div id="username-disponibilidad" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
       </div>
     </div>
     <div class="form-grid dos" style="margin-top:12px;">
       <div class="campo"><label>Rol *</label>
-        <select id="usuario-rol">
-          <option value="consulta">Consulta (solo lectura)</option>
-          <option value="recepcion">Recepción / Asesor</option>
-          <option value="administrador">Administrador</option>
-        </select>
+        <select id="usuario-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="administrador">Administrador</option></select>
       </div>
       <div class="campo"><label>Estado</label>
-        <select id="usuario-activo">
-          <option value="true">Activo</option>
-          <option value="false">Inactivo (acceso bloqueado)</option>
-        </select>
+        <select id="usuario-activo"><option value="true">Activo</option><option value="false">Inactivo (acceso bloqueado)</option></select>
       </div>
     </div>
- <input type="hidden" id="usuario-id">
+    <input type="hidden" id="usuario-id">
     <!-- V7 · Restablecer contraseña -->
     <div class="campo" style="margin-top:14px;">
       <label>Nueva contraseña <span style="font-weight:400; color:var(--text-mute);">— déjala vacía si no la vas a cambiar</span></label>
@@ -500,7 +470,6 @@
         <button type="button" class="btn secundario pequeno" id="btn-reset-password">Restablecer</button>
       </div>
     </div>
-
     <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center;">
       <button type="button" class="btn peligro" id="btn-eliminar-usuario">Eliminar usuario</button>
       <div>
@@ -509,11 +478,9 @@
       </div>
     </div>
     <div id="mensaje-usuario"></div>
-```
-
   </div>
 </div>
-<!-- ======================= MODAL: CREAR USUARIO (V4) ======================= -->
+<!-- ======================= MODAL: CREAR USUARIO ======================= -->
 <div class="modal-fondo" id="modal-crear-usuario">
   <div class="modal" style="max-width:560px;">
     <button class="cerrar" data-cerrar-modal="modal-crear-usuario">×</button>
@@ -522,7 +489,7 @@
     <div class="form-grid dos">
       <div class="campo"><label>Nombre completo *</label><input id="nuevo-nombre" placeholder="Ej. Eder Castillo Colín"></div>
       <div class="campo">
-        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — se usa para entrar</span></label>
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — para entrar</span></label>
         <div style="display:flex; gap:6px; align-items:center;">
           <input id="nuevo-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
           <button type="button" class="btn secundario pequeno" id="btn-generar-nuevo-username" title="Generar desde el nombre">✦ Generar</button>
@@ -536,11 +503,7 @@
     </div>
     <div class="form-grid dos" style="margin-top:12px;">
       <div class="campo"><label>Rol *</label>
-        <select id="nuevo-rol">
-          <option value="consulta">Consulta (solo lectura)</option>
-          <option value="recepcion">Recepción / Asesor</option>
-          <option value="administrador">Administrador</option>
-        </select>
+        <select id="nuevo-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="administrador">Administrador</option></select>
       </div>
     </div>
     <div style="margin-top:18px; text-align:right;">
@@ -550,7 +513,7 @@
     <div id="mensaje-crear-usuario"></div>
   </div>
 </div>
-<!-- ======================= MODAL: HISTORIAL POR VEHÍCULO ======================= -->
+<!-- ======================= MODAL: HISTORIAL ======================= -->
 <div class="modal-fondo" id="modal-historial">
   <div class="modal" style="max-width:840px;">
     <button class="cerrar" data-cerrar-modal="modal-historial">×</button>
@@ -570,6 +533,32 @@
     <ul class="linea-tiempo" id="lista-historial-placas"></ul>
     <h3 style="margin-top:18px;">Línea de tiempo (todas las visitas)</h3>
     <ul class="linea-tiempo" id="lista-historial-seguimiento"></ul>
+  </div>
+</div>
+<!-- ======================= MODAL: CREAR COMBO (V8) ======================= -->
+<div class="modal-fondo" id="modal-combo">
+  <div class="modal" style="max-width:720px;">
+    <button class="cerrar" data-cerrar-modal="modal-combo">×</button>
+    <h3>Crear combo / paquete</h3>
+    <div class="campo"><label>Nombre del combo *</label><input id="combo-nombre" placeholder="Ej. Afinación mayor"></div>
+    <div class="bloque-inline" style="margin-top:14px;">
+      <div class="bloque-titulo"><span>Agregar conceptos al combo</span></div>
+      <div class="form-grid">
+        <div class="campo"><label>Categoría</label><select id="combo-cat"><option value="">Selecciona…</option></select></div>
+        <div class="campo"><label>Concepto</label><select id="combo-concepto"><option value="">Primero elige categoría…</option></select></div>
+        <div class="campo"><label>Cantidad</label><input type="number" step="1" min="1" id="combo-cantidad" value="1"></div>
+      </div>
+      <button type="button" class="btn secundario pequeno" id="btn-combo-add-item" style="margin-top:8px;">+ Añadir al combo</button>
+    </div>
+    <table class="tabla" style="margin-top:12px;">
+      <thead><tr><th>Concepto</th><th>Tipo</th><th>Cantidad</th><th></th></tr></thead>
+      <tbody id="combo-lista-items"><tr><td colspan="4" class="vacio-tabla">Aún no agregas conceptos.</td></tr></tbody>
+    </table>
+    <div style="margin-top:16px; text-align:right;">
+      <button type="button" class="btn secundario" data-cerrar-modal="modal-combo">Cancelar</button>
+      <button type="button" class="btn" id="btn-guardar-combo">Guardar combo</button>
+    </div>
+    <div id="mensaje-combo"></div>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
