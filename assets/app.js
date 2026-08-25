@@ -767,7 +767,7 @@ async function cargarPagosCotizacion(cotizacionId) {
 }
 el("btn-agregar-pago").addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
-  if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de registrar pagos.", "error"); return; }
+  if (!id) { alert("⚠ Primero guarda la cotización (pestaña 'Datos y conceptos') y luego podrás registrar pagos."); return; }
   const importe = Number(el("pago-importe").value || 0); if (importe <= 0) return;
   const registro = { cotizacion_id: id, importe, metodo: el("pago-metodo").value, referencia: el("pago-referencia").value.trim()||null, comentario: el("pago-comentario").value.trim()||null, usuario_id: estado.usuario.id };
   const { data, error } = await sb.from("pagos").insert(registro).select().single();
