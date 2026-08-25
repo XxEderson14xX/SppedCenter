@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-
 <!-- ======================= PANTALLA DE LOGIN ======================= -->
 <div id="pantalla-login">
   <div class="login-card">
@@ -23,12 +22,10 @@
     </form>
   </div>
 </div>
-
 <!-- ======================= APP PRINCIPAL ======================= -->
 <div id="app-shell">
   <nav id="nav-lateral">
-    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V1</small></div>
-
+    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V5</small></div>
     <a class="nav-item activo" data-modulo="inicio">Inicio</a>
     <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
     <a class="nav-item" data-modulo="clientes">Clientes</a>
@@ -37,16 +34,13 @@
     <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
     <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
     <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
-
     <div class="pie">
       <div id="pie-usuario">—</div>
       <div id="pie-rol">—</div>
       <button id="btn-salir">Cerrar sesión</button>
     </div>
   </nav>
-
   <main id="contenido">
-
     <!-- ---------------- INICIO / DASHBOARD ---------------- -->
     <section class="modulo activo" id="modulo-inicio">
       <div class="encabezado-modulo">
@@ -69,7 +63,6 @@
         </table>
       </div>
     </section>
-
     <!-- ---------------- COTIZACIONES ---------------- -->
     <section class="modulo" id="modulo-cotizaciones">
       <div class="encabezado-modulo">
@@ -88,6 +81,12 @@
           <option value="cancelada">Cancelada</option>
           <option value="cerrada">Cerrada</option>
         </select>
+        <!-- BUG #5 · filtro por estado de pago -->
+        <select id="filtro-estado-pago">
+          <option value="">Pago: todos</option>
+          <option value="con_saldo">Con saldo pendiente</option>
+          <option value="pagada">Pagadas</option>
+        </select>
         <div class="spacer"></div>
       </div>
       <div class="panel">
@@ -97,7 +96,6 @@
         </table>
       </div>
     </section>
-
     <!-- ---------------- CLIENTES ---------------- -->
     <section class="modulo" id="modulo-clientes">
       <div class="encabezado-modulo">
@@ -114,7 +112,6 @@
         </table>
       </div>
     </section>
-
     <!-- ---------------- VEHÍCULOS / HISTORIAL ---------------- -->
     <section class="modulo" id="modulo-vehiculos">
       <div class="encabezado-modulo">
@@ -131,7 +128,6 @@
         </table>
       </div>
     </section>
-
     <!-- ---------------- CATÁLOGO ---------------- -->
     <section class="modulo" id="modulo-catalogo">
       <div class="encabezado-modulo">
@@ -148,7 +144,6 @@
         </table>
       </div>
     </section>
-
     <!-- ---------------- IMPORTACIÓN ---------------- -->
     <section class="modulo" id="modulo-importacion">
       <div class="encabezado-modulo">
@@ -160,46 +155,27 @@
         <div id="previa-importacion"></div>
       </div>
     </section>
-
     <!-- ---------------- USUARIOS ---------------- -->
     <section class="modulo" id="modulo-usuarios">
       <div class="encabezado-modulo">
         <div><h2>Gestión de usuarios</h2><p>Crea y administra los accesos al sistema</p></div>
       </div>
-
-      <div class="panel" style="background:#f0f7fa; border:1px solid #c5dce5; margin-bottom:18px;">
-        <strong style="color:var(--navy);">¿Cómo crear un usuario nuevo?</strong>
-        <ol style="margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--text-mute); line-height:1.7;">
-          <li>Ve a <strong>Supabase → Authentication → Users → Add user</strong> y crea el usuario con su correo y contraseña. Marca <strong>"Auto Confirm User"</strong>.</li>
-          <li>Regresa aquí: el usuario aparecerá en la tabla de abajo en unos segundos (refresca si no aparece).</li>
-          <li>Da clic en <strong>"Editar perfil"</strong>, asígnale nombre completo, nombre de usuario y rol, y guarda.</li>
-        </ol>
-      </div>
-
       <div class="barra-acciones">
         <input type="search" id="buscar-usuario" placeholder="Buscar por nombre o usuario…">
         <div class="spacer"></div>
+        <!-- V4 · botón crear usuario -->
+        <button class="btn" id="btn-nuevo-usuario">+ Crear usuario</button>
         <button class="btn secundario" id="btn-refrescar-usuarios">↻ Refrescar</button>
-        <button class="btn" id="btn-nuevo-usuario">+ Nuevo usuario</button>
       </div>
-
       <div class="panel">
         <table class="tabla">
           <thead>
-            <tr>
-              <th>Usuario</th>
-              <th>Nombre completo</th>
-              <th>Correo</th>
-              <th>Rol</th>
-              <th>Estado</th>
-              <th></th>
-            </tr>
+            <tr><th>Usuario</th><th>Nombre completo</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr>
           </thead>
           <tbody id="tabla-usuarios"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
         </table>
       </div>
     </section>
-
     <!-- ---------------- BITÁCORA ---------------- -->
     <section class="modulo" id="modulo-bitacora">
       <div class="encabezado-modulo">
@@ -212,10 +188,8 @@
         </table>
       </div>
     </section>
-
   </main>
 </div>
-
 <!-- ======================= MODALES ======================= -->
 <div class="modal-fondo" id="modal-cliente">
   <div class="modal">
@@ -239,13 +213,29 @@
     </form>
   </div>
 </div>
-
 <div class="modal-fondo" id="modal-vehiculo">
   <div class="modal">
     <button class="cerrar" data-cerrar-modal="modal-vehiculo">×</button>
     <h3 id="titulo-modal-vehiculo">Nuevo vehículo</h3>
     <form id="form-vehiculo">
       <input type="hidden" id="vehiculo-id">
+      <!-- MEJORA #9 · cascada de catálogo de autos -->
+      <div class="campo" style="grid-column:1/-1;">
+        <label>Selecciona el vehículo del catálogo (Año → Marca → Modelo → Versión → Motor)</label>
+        <div class="form-grid">
+          <div class="campo"><label>Año</label><select id="cat-anio"><option value="">—</option></select></div>
+          <div class="campo"><label>Marca</label><select id="cat-marca"><option value="">—</option></select></div>
+          <div class="campo"><label>Modelo</label><select id="cat-modelo"><option value="">—</option></select></div>
+          <div class="campo"><label>Versión (opcional)</label><select id="cat-version"><option value="">—</option></select></div>
+          <div class="campo"><label>Motor (opcional)</label><select id="cat-motor"><option value="">—</option></select></div>
+        </div>
+        <div style="margin-top:6px;">
+          <label style="font-size:12px;">
+            <input type="checkbox" id="cat-manual" style="width:auto; display:inline-block; margin-right:6px;">
+            El auto no está en el catálogo — capturar a mano (se agregará al catálogo)
+          </label>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="campo"><label>Cliente *</label><select id="vehiculo-cliente" required></select></div>
         <div class="campo"><label>Placa *</label><input id="vehiculo-placa" required></div>
@@ -266,7 +256,6 @@
     </form>
   </div>
 </div>
-
 <div class="modal-fondo" id="modal-servicio">
   <div class="modal">
     <button class="cerrar" data-cerrar-modal="modal-servicio">×</button>
@@ -294,24 +283,28 @@
     </form>
   </div>
 </div>
-
 <!-- Modal grande: detalle de cotización -->
 <div class="modal-fondo" id="modal-cotizacion">
   <div class="modal" style="max-width:880px;">
     <button class="cerrar" data-cerrar-modal="modal-cotizacion">×</button>
     <h3 id="titulo-modal-cotizacion">Nueva cotización</h3>
     <input type="hidden" id="cotizacion-id">
-
     <div class="pestanas">
       <div class="pestana activa" data-pestana="datos">Datos y conceptos</div>
       <div class="pestana" data-pestana="pagos">Pagos</div>
       <div class="pestana" data-pestana="seguimiento">Seguimiento</div>
       <div class="pestana" data-pestana="archivos">Archivos</div>
     </div>
-
     <div class="vista-pestana" id="pestana-datos">
       <div class="form-grid">
-        <div class="campo"><label>Cliente *</label><select id="cotizacion-cliente" required></select></div>
+        <!-- MEJORA #3/#7 · botón crear cliente desde la cotización -->
+        <div class="campo">
+          <label>Cliente *</label>
+          <div style="display:flex; gap:6px;">
+            <select id="cotizacion-cliente" required style="flex:1;"></select>
+            <button type="button" class="btn secundario pequeno solo-staff" id="btn-cliente-rapido" title="Registrar cliente nuevo">＋ Nuevo</button>
+          </div>
+        </div>
         <div class="campo"><label>Vehículo *</label><select id="cotizacion-vehiculo" required></select></div>
         <div class="campo"><label>Entrega estimada</label><input type="date" id="cotizacion-entrega"></div>
         <div class="campo"><label>Kilometraje de esta visita</label><input type="number" id="cotizacion-km"></div>
@@ -338,7 +331,6 @@
         </div>
       </div>
       <div class="campo" style="margin-top:12px;"><label>Observaciones</label><textarea id="cotizacion-observaciones"></textarea></div>
-
       <div class="panel" id="panel-cierre" style="box-shadow:none; border:1px solid var(--border); margin-top:14px; display:none;">
         <h3>Requisitos de cierre</h3>
         <div class="campo"><label>Notas finales (obligatorio para cerrar)</label><textarea id="cotizacion-notas-finales"></textarea></div>
@@ -352,7 +344,6 @@
           </div>
         </div>
       </div>
-
       <h3 style="margin-top:18px;">Conceptos</h3>
       <table class="detalle-items" id="tabla-conceptos">
         <thead>
@@ -361,13 +352,11 @@
         <tbody id="cuerpo-conceptos"></tbody>
       </table>
       <button type="button" class="btn secundario pequeno solo-staff" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto</button>
-
       <div class="totales-cotizacion">
         Subtotal: $<span id="cotizacion-subtotal">0.00</span><br>
         Descuento: $<span id="cotizacion-descuento">0.00</span><br>
         <strong>Total: $<span id="cotizacion-total">0.00</span></strong>
       </div>
-
       <div style="margin-top:16px; text-align:right;">
         <button type="button" class="btn secundario" id="btn-pdf-cotizacion">Descargar PDF</button>
         <button type="button" class="btn secundario" data-cerrar-modal="modal-cotizacion">Cerrar</button>
@@ -375,7 +364,6 @@
       </div>
       <div id="mensaje-cotizacion"></div>
     </div>
-
     <div class="vista-pestana" id="pestana-pagos" style="display:none;">
       <div class="panel" style="box-shadow:none; border:1px solid var(--border);">
         <h3>Registrar pago</h3>
@@ -401,7 +389,6 @@
       </table>
       <div class="totales-cotizacion">Saldo pendiente: $<strong id="cotizacion-saldo">0.00</strong></div>
     </div>
-
     <div class="vista-pestana" id="pestana-seguimiento" style="display:none;">
       <div class="form-grid">
         <div class="campo" style="grid-column: 1 / -1;"><label>Nueva nota de seguimiento</label><textarea id="seguimiento-texto"></textarea></div>
@@ -409,7 +396,6 @@
       <button type="button" class="btn pequeno solo-staff" id="btn-agregar-seguimiento" style="margin-top:8px;">Agregar al seguimiento</button>
       <ul class="linea-tiempo" id="lista-seguimiento" style="margin-top:16px;"></ul>
     </div>
-
     <div class="vista-pestana" id="pestana-archivos" style="display:none;">
       <div class="panel" style="box-shadow:none; border:1px solid var(--border);">
         <h3>Subir evidencia</h3>
@@ -433,84 +419,22 @@
     </div>
   </div>
 </div>
-
-<!-- Modal: nuevo usuario -->
-<div class="modal-fondo" id="modal-nuevo-usuario">
-  <div class="modal" style="max-width:560px;">
-    <button class="cerrar" data-cerrar-modal="modal-nuevo-usuario">×</button>
-    <h3>Nuevo usuario</h3>
-
-    <div class="form-grid dos">
-      <div class="campo" style="grid-column:1/-1;">
-        <label>Nombre completo *</label>
-        <input id="nuevo-nombre" placeholder="Ej. Ernesto Castillo Colin" autocomplete="off">
-      </div>
-      <div class="campo">
-        <label>Nombre de usuario *</label>
-        <div style="display:flex; gap:6px;">
-          <input id="nuevo-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;" autocomplete="off">
-          <button type="button" class="btn secundario pequeno" id="btn-generar-nuevo-username" title="Generar desde el nombre">✦</button>
-        </div>
-        <div id="nuevo-username-disponibilidad" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
-      </div>
-      <div class="campo">
-        <label>Rol *</label>
-        <select id="nuevo-rol">
-          <option value="consulta">Consulta (solo lectura)</option>
-          <option value="recepcion">Recepción / Asesor</option>
-          <option value="administrador">Administrador</option>
-        </select>
-      </div>
-      <div class="campo" style="grid-column:1/-1;">
-        <label>Correo *
-          <span style="font-weight:400; color:var(--text-mute);"> — se usa para recuperar contraseña</span>
-        </label>
-        <input type="email" id="nuevo-correo" placeholder="correo@ejemplo.com" autocomplete="off">
-      </div>
-      <div class="campo">
-        <label>Contraseña inicial *</label>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <input type="text" id="nuevo-password" placeholder="Mínimo 6 caracteres" style="flex:1;" autocomplete="new-password">
-          <button type="button" class="btn secundario pequeno" id="btn-generar-password" title="Generar contraseña aleatoria">🔀</button>
-        </div>
-        <div style="font-size:11px; color:var(--text-mute); margin-top:3px;">El usuario puede cambiarla después.</div>
-      </div>
-      <div class="campo" style="display:flex; align-items:flex-end; padding-bottom:2px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:400;">
-          <input type="checkbox" id="nuevo-mostrar-password" style="width:auto;">
-          Mostrar contraseña
-        </label>
-      </div>
-    </div>
-
-    <div style="margin-top:18px; text-align:right;">
-      <button type="button" class="btn secundario" data-cerrar-modal="modal-nuevo-usuario">Cancelar</button>
-      <button type="button" class="btn" id="btn-crear-usuario">Crear usuario</button>
-    </div>
-    <div id="mensaje-nuevo-usuario" style="margin-top:10px;"></div>
-  </div>
-</div>
-
 <!-- Modal: editar perfil de usuario -->
 <div class="modal-fondo" id="modal-usuario">
   <div class="modal" style="max-width:540px;">
     <button class="cerrar" data-cerrar-modal="modal-usuario">×</button>
     <h3 id="titulo-modal-usuario">Editar perfil de usuario</h3>
-
     <div class="campo" style="margin-bottom:12px;">
       <label>Correo (solo lectura — se gestiona en Supabase)</label>
       <input id="usuario-correo-display" readonly style="background:#f4f6f8; color:var(--text-mute);">
     </div>
-
     <div class="form-grid dos">
       <div class="campo">
         <label>Nombre completo *</label>
         <input id="usuario-nombre" placeholder="Ej. Ernesto Castillo Colin">
       </div>
       <div class="campo">
-        <label>Nombre de usuario *
-          <span style="font-weight:400; color:var(--text-mute);"> — se usa para iniciar sesión</span>
-        </label>
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — se usa para iniciar sesión</span></label>
         <div style="display:flex; gap:6px; align-items:center;">
           <input id="usuario-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
           <button type="button" class="btn secundario pequeno" id="btn-generar-username" title="Generar automáticamente desde el nombre">✦ Generar</button>
@@ -518,7 +442,6 @@
         <div id="username-disponibilidad" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
       </div>
     </div>
-
     <div class="form-grid dos" style="margin-top:12px;">
       <div class="campo">
         <label>Rol *</label>
@@ -536,9 +459,7 @@
         </select>
       </div>
     </div>
-
     <input type="hidden" id="usuario-id">
-
     <div style="margin-top:18px; text-align:right;">
       <button type="button" class="btn secundario" data-cerrar-modal="modal-usuario">Cancelar</button>
       <button type="button" class="btn" id="btn-guardar-usuario">Guardar perfil</button>
@@ -546,31 +467,67 @@
     <div id="mensaje-usuario"></div>
   </div>
 </div>
-
+<!-- V4 · Modal: crear usuario nuevo -->
+<div class="modal-fondo" id="modal-crear-usuario">
+  <div class="modal" style="max-width:560px;">
+    <button class="cerrar" data-cerrar-modal="modal-crear-usuario">×</button>
+    <h3>Crear usuario nuevo</h3>
+    <p style="color:var(--text-mute); font-size:13px; margin-top:-6px;">El usuario podrá iniciar sesión con su <strong>usuario</strong> o su correo.</p>
+    <div class="form-grid dos">
+      <div class="campo">
+        <label>Nombre completo *</label>
+        <input id="nuevo-nombre" placeholder="Ej. Eder Castillo Colín">
+      </div>
+      <div class="campo">
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — se usa para entrar</span></label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="nuevo-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
+          <button type="button" class="btn secundario pequeno" id="btn-generar-nuevo-username" title="Generar desde el nombre">✦ Generar</button>
+        </div>
+        <div id="nuevo-username-estado" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
+      </div>
+    </div>
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo"><label>Correo *</label><input type="email" id="nuevo-correo" placeholder="correo@ejemplo.com"></div>
+      <div class="campo"><label>Contraseña temporal *</label><input id="nuevo-password" placeholder="mínimo 6 caracteres"></div>
+    </div>
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo">
+        <label>Rol *</label>
+        <select id="nuevo-rol">
+          <option value="consulta">Consulta (solo lectura)</option>
+          <option value="recepcion">Recepción / Asesor</option>
+          <option value="administrador">Administrador</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:18px; text-align:right;">
+      <button type="button" class="btn secundario" data-cerrar-modal="modal-crear-usuario">Cancelar</button>
+      <button type="button" class="btn" id="btn-confirmar-crear-usuario">Crear usuario</button>
+    </div>
+    <div id="mensaje-crear-usuario"></div>
+  </div>
+</div>
 <!-- Modal grande: historial por placa -->
 <div class="modal-fondo" id="modal-historial">
   <div class="modal" style="max-width:820px;">
     <button class="cerrar" data-cerrar-modal="modal-historial">×</button>
     <h3 id="titulo-historial">Historial del vehículo</h3>
     <p id="subtitulo-historial" style="color:var(--text-mute); font-size:13px; margin-top:-8px;"></p>
-
     <div class="kpis" id="kpis-historial" style="margin-bottom:16px;">
       <div class="kpi"><div class="valor">—</div><div class="etiqueta">Visitas totales</div></div>
       <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">Total facturado histórico</div></div>
       <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Saldo pendiente acumulado</div></div>
     </div>
-
     <h3>Cotizaciones</h3>
     <table class="tabla">
       <thead><tr><th>Folio</th><th>Fecha</th><th>Km</th><th>Total</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>
       <tbody id="tabla-historial-cotizaciones"></tbody>
     </table>
-
     <h3 style="margin-top:18px;">Línea de tiempo (todas las visitas)</h3>
     <ul class="linea-tiempo" id="lista-historial-seguimiento"></ul>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
