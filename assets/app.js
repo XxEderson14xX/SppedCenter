@@ -1,7 +1,8 @@
 // ============================================================================
 // Sistema Taller Automotriz · app.js · Versión V6
 // Captura inline de cliente/vehículo desde la cotización + identidad permanente
-// (VIN para autos, id interno para clientes). Incluye correcciones V5.
+// (VIN para autos, id interno para clientes). Incluye correcciones V5 y el
+// "gate" de pestañas (Pagos/Seguimiento/Archivos) que exige guardar primero.
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -186,7 +187,7 @@ el("form-cliente").addEventListener("submit", async (ev) => {
   };
   let error, data;
   if (id) {
-    // Si cambió el teléfono, usar la función que guarda historial
+    // Si cambió el teléfono, usar la función que guarda historial (V6)
     const anterior = estado.clientes.find(c => c.id === id);
     ({ data, error } = await sb.from("clientes").update(registro).eq("id", id).select().single());
     if (!error && anterior && (anterior.telefono || "") !== (telNuevo || "") && telNuevo) {
@@ -337,7 +338,7 @@ async function verHistorialVehiculo(vehiculoId) {
     return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
   }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
-  // Historial de placas del auto
+  // Historial de placas del auto (V6)
   const { data: placas } = await sb.from("placas_historial").select("*").eq("vehiculo_id", vehiculoId).order("desde", { ascending: false });
   el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${p.placa}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?cot.folio:""}</strong> · ${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
@@ -421,17 +422,44 @@ el("buscar-cotizacion").addEventListener("input", () => aplicarFiltrosCotizacion
 el("filtro-estado-comercial").addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 el("filtro-estado-pago")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 
-// --- Pestañas del modal ---
+// --- Pestañas del modal (con recálculo del gate de guardado) ---
 document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", () => {
   document.querySelectorAll(".pestana").forEach(x => x.classList.remove("activa"));
   p.classList.add("activa");
   ["datos","pagos","seguimiento","archivos"].forEach(n => el("pestana-"+n).style.display = n === p.dataset.pestana ? "block" : "none");
+  actualizarGatePagos();
 }));
 
 el("btn-nueva-cotizacion").addEventListener("click", () => abrirCotizacion(null));
 
+// --- GATE: Pagos/Seguimiento/Archivos requieren cotización ya guardada ---
+// Muestra un aviso elegante y bloquea los botones hasta que exista la cotización.
+function actualizarGatePagos() {
+  const hayCotizacion = !!(el("cotizacion-id") && el("cotizacion-id").value);
+  const secciones = [
+    { pestana: "pestana-pagos",       boton: "btn-agregar-pago",       texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para poder registrar pagos." },
+    { pestana: "pestana-seguimiento", boton: "btn-agregar-seguimiento", texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para agregar seguimiento." },
+    { pestana: "pestana-archivos",    boton: "btn-subir-archivo",       texto: "Guarda la cotización en la pestaña <strong>Datos y conceptos</strong> para subir archivos." },
+  ];
+  secciones.forEach(s => {
+    const cont = el(s.pestana);
+    if (cont) {
+      let banner = cont.querySelector(".aviso-guardar");
+      if (!banner) { banner = document.createElement("div"); banner.className = "aviso-guardar"; cont.insertBefore(banner, cont.firstChild); }
+      banner.innerHTML = `⚠️ ${s.texto}`;
+      banner.style.display = hayCotizacion ? "none" : "flex";
+    }
+    const boton = el(s.boton);
+    if (boton) {
+      boton.disabled = !hayCotizacion;
+      boton.classList.toggle("btn-bloqueado", !hayCotizacion);
+      boton.title = hayCotizacion ? "" : "Primero guarda la cotización";
+    }
+  });
+}
+
 // ============================================================================
-// V6 · CLIENTE Y VEHÍCULO INLINE
+// V6 · CLIENTE Y VEHÍCULO INLINE (dentro de la cotización)
 // ============================================================================
 document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.addEventListener("change", () => {
   const nuevo = document.querySelector('input[name="modo-cliente"]:checked').value === "nuevo";
@@ -612,6 +640,7 @@ async function abrirCotizacion(id) {
     await cargarSeguimientoCotizacion(id);
   }
   renderConceptos();
+  actualizarGatePagos();   // refresca el gate según haya o no cotización
   abrirModal("modal-cotizacion");
 }
 
@@ -733,6 +762,7 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
     const { data, error } = await sb.from("cotizaciones").insert(encabezado).select().single();
     if (error) { mostrarMensaje("mensaje-cotizacion", "Error al crear: " + error.message, "error"); return; }
     id = data.id; el("cotizacion-id").value = id;
+    el("titulo-modal-cotizacion").textContent = data.folio || "Cotización";
     await registrarBitacora("cotizaciones", id, "crear", null, encabezado);
   } else {
     const { error } = await sb.from("cotizaciones").update(encabezado).eq("id", id);
@@ -745,7 +775,8 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
     const filas = estado.conceptosEnEdicion.map(c => ({ cotizacion_id: id, tipo: c.tipo, descripcion: c.descripcion, cantidad: c.cantidad || 1, precio_unitario: c.precio_unitario || 0, descuento: c.descuento || 0, importe: c.importe || 0 }));
     await sb.from("detalle_cotizacion").insert(filas);
   }
-  mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente.");
+  actualizarGatePagos();  // ahora ya hay cotización → habilita pagos/seguimiento/archivos
+  mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
   await cargarDatosBase();
   await cargarCotizaciones();
 });
@@ -767,7 +798,7 @@ async function cargarPagosCotizacion(cotizacionId) {
 }
 el("btn-agregar-pago").addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
-  if (!id) { alert("⚠ Primero guarda la cotización (pestaña 'Datos y conceptos') y luego podrás registrar pagos."); return; }
+  if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de registrar pagos.", "error"); return; }
   const importe = Number(el("pago-importe").value || 0); if (importe <= 0) return;
   const registro = { cotizacion_id: id, importe, metodo: el("pago-metodo").value, referencia: el("pago-referencia").value.trim()||null, comentario: el("pago-comentario").value.trim()||null, usuario_id: estado.usuario.id };
   const { data, error } = await sb.from("pagos").insert(registro).select().single();
