@@ -970,6 +970,7 @@ function abrirModalUsuario(u) {
   el("usuario-rol").value = u ? u.rol || "consulta" : "consulta";
   el("usuario-activo").value = u && u.activo !== false ? "true" : "false";
   el("username-disponibilidad").textContent = "";
+  el("usuario-password").value = "";
   abrirModal("modal-usuario");
 }
 el("btn-generar-username").addEventListener("click", async () => {
