@@ -30,7 +30,7 @@
     <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
     <a class="nav-item" data-modulo="clientes">Clientes</a>
     <a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a>
-    <a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a>
+    <a class="nav-item" data-modulo="catalogo">Catálogo</a>
     <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
     <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
     <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
@@ -118,30 +118,45 @@
         </table>
       </div>
     </section>
-    <!-- CATÁLOGO -->
+    <!-- CATÁLOGO V8b: fuente única catalogo_maestro -->
     <section class="modulo" id="modulo-catalogo">
       <div class="encabezado-modulo">
-        <div><h2>Catálogo de servicios</h2><p>Servicios, mano de obra, consumibles y combos</p></div>
+        <div><h2>Catálogo</h2><p>Servicios, refacciones, mano de obra y combos del taller</p></div>
         <div style="display:flex; gap:8px;">
-          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo servicio</button>
+          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo concepto</button>
           <button class="btn secundario solo-staff" id="btn-nuevo-combo">🎁 Crear combo</button>
         </div>
       </div>
-      <div class="barra-acciones"><input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…"></div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
+        <select id="filtro-catalogo-tipo">
+          <option value="">Todos los tipos</option>
+          <option value="CONCEPTO_SERVICIO">Servicios</option>
+          <option value="CONCEPTO_REFACCION">Refacciones</option>
+          <option value="CONCEPTO_MANO_OBRA">Mano de obra</option>
+          <option value="COMBO">Combos</option>
+        </select>
+      </div>
       <div class="panel">
         <table class="tabla">
-          <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Estado</th><th></th></tr></thead>
           <tbody id="tabla-catalogo"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
         </table>
       </div>
     </section>
-    <!-- IMPORTACIÓN -->
+    <!-- IMPORTACIÓN V8b: plantilla descargable + catalogo_maestro -->
     <section class="modulo" id="modulo-importacion">
       <div class="encabezado-modulo">
-        <div><h2>Importación masiva de servicios</h2><p>Sube un CSV con columnas: codigo, nombre, descripcion, categoria, unidad_medida, precio_venta, costo_interno, impuesto, estado, observaciones</p></div>
+        <div><h2>Importación masiva de conceptos</h2><p>Descarga la plantilla, captura los conceptos y carga el CSV al catálogo maestro.</p></div>
+        <button class="btn secundario" id="btn-descargar-plantilla">📥 Descargar plantilla CSV</button>
       </div>
       <div class="panel">
-        <input type="file" id="input-importar" accept=".csv">
+        <p class="hint" style="margin-top:0; margin-bottom:14px;">
+          Columnas requeridas: <strong>tipo, codigo, nombre, categoria_codigo</strong>.<br>
+          Tipos permitidos: CONCEPTO_SERVICIO, CONCEPTO_REFACCION y CONCEPTO_MANO_OBRA.<br>
+          Si el código ya existe, el registro se actualiza. No se administran precios en el catálogo.
+        </p>
+        <input type="file" id="input-importar" accept=".csv,text/csv">
         <div id="mensaje-importacion" style="margin-top:10px;"></div>
         <div id="previa-importacion"></div>
       </div>
@@ -235,24 +250,27 @@
     </form>
   </div>
 </div>
-<!-- ======================= MODAL: SERVICIO ======================= -->
+<!-- ======================= MODAL: CONCEPTO V8b ======================= -->
 <div class="modal-fondo" id="modal-servicio">
   <div class="modal">
     <button class="cerrar" data-cerrar-modal="modal-servicio">×</button>
-    <h3 id="titulo-modal-servicio">Nuevo servicio</h3>
+    <h3 id="titulo-modal-servicio">Nuevo concepto</h3>
     <form id="form-servicio">
       <input type="hidden" id="servicio-id">
       <div class="form-grid">
-        <div class="campo"><label>Código *</label><input id="servicio-codigo" required></div>
-        <div class="campo"><label>Nombre *</label><input id="servicio-nombre" required></div>
-        <div class="campo"><label>Categoría</label><select id="servicio-categoria"></select></div>
-        <div class="campo"><label>Unidad de medida</label><input id="servicio-unidad" value="servicio"></div>
-        <div class="campo"><label>Precio de venta *</label><input type="number" step="0.01" id="servicio-precio" required></div>
-        <div class="campo"><label>Costo interno</label><input type="number" step="0.01" id="servicio-costo"></div>
-        <div class="campo"><label>Impuesto (%)</label><input type="number" step="0.01" id="servicio-impuesto" value="0"></div>
-        <div class="campo"><label>Estado</label><select id="servicio-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+        <div class="campo"><label>Tipo *</label>
+          <select id="servicio-tipo">
+            <option value="CONCEPTO_SERVICIO">Servicio</option>
+            <option value="CONCEPTO_REFACCION">Refacción</option>
+            <option value="CONCEPTO_MANO_OBRA">Mano de obra</option>
+          </select>
+        </div>
+        <div class="campo"><label>Categoría *</label><select id="servicio-categoria" required></select></div>
+        <div class="campo" style="grid-column:1/-1;"><label>Nombre / descripción *</label><input id="servicio-nombre" required></div>
+        <div class="campo"><label>Código <span style="font-weight:400; color:var(--text-mute);">(opcional, se genera)</span></label><input id="servicio-codigo" placeholder="Ej. MNT-100"></div>
+        <div class="campo"><label>Estado</label><select id="servicio-estado"><option value="true">Activo</option><option value="false">Inactivo</option></select></div>
       </div>
-      <div class="campo" style="margin-top:12px;"><label>Descripción</label><textarea id="servicio-descripcion"></textarea></div>
+      <p class="hint" style="margin-top:10px;">El catálogo no guarda precios. El precio se captura manualmente en la cotización.</p>
       <div style="margin-top:16px; text-align:right;">
         <button type="button" class="btn secundario" data-cerrar-modal="modal-servicio">Cancelar</button>
         <button type="submit" class="btn">Guardar</button>
