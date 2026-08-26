@@ -1,5 +1,5 @@
 /* ============================================================================
-   Sistema Taller Automotriz · styles.css · Versión V8
+   Sistema Taller Automotriz · styles.css · Versión V8b
    Base + badges + inline (V6) + gate pagos/botón peligro (V7) +
    cascada de catálogo y homologación visual (V8).
    ============================================================================ */
@@ -163,3 +163,8 @@ a { color:var(--teal); }
   #app-shell.activo { flex-direction:column; }
   .form-grid, .form-grid.dos { grid-template-columns:1fr; }
 }
+
+/* V8b · catálogo unificado */
+.badge.morado { background:#f0e9f7; color:#70459e; border-color:#d8c5eb; }
+#filtro-catalogo-tipo { min-width:190px; }
+#previa-importacion { margin-top:16px; overflow-x:auto; }
