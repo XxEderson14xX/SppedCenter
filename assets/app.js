@@ -1,5 +1,5 @@
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V8
+// Sistema Taller Automotriz · app.js · Versión V8b
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
 // + V8 (cascada de catálogo maestro en la cotización + creación de combos).
 // ============================================================================
@@ -7,7 +7,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const estado = {
   usuario: null, perfil: null,
-  clientes: [], vehiculos: [], servicios: [], categorias: [],
+  clientes: [], vehiculos: [],
   cotizacionActualId: null, conceptosEnEdicion: [],
 };
 const seleccion = { clienteId: null, vehiculoId: null };
@@ -89,27 +89,18 @@ document.querySelectorAll(".nav-item").forEach(item => {
 });
 
 async function cargarDatosBase() {
-  const [{ data: clientes }, { data: vehiculos }, { data: servicios }, { data: categorias }] = await Promise.all([
+  const [{ data: clientes }, { data: vehiculos }] = await Promise.all([
     sb.from("clientes").select("*").order("nombre_completo"),
     sb.from("vehiculos").select("*, clientes(nombre_completo)").order("placa"),
-    sb.from("servicios").select("*").order("nombre"),
-    sb.from("categorias").select("*").order("nombre"),
   ]);
   estado.clientes = clientes || [];
   estado.vehiculos = vehiculos || [];
-  estado.servicios = servicios || [];
-  estado.categorias = categorias || [];
   llenarSelect("cliente", "vehiculo-cliente");
-  llenarSelectCategorias();
 }
 function llenarSelect(tipo, idSelect) {
   const sel = el(idSelect); if (!sel) return;
   const lista = tipo === "cliente" ? estado.clientes : [];
   sel.innerHTML = `<option value="">Selecciona…</option>` + lista.map(c => { const extra = c.telefono || c.rfc || c.correo || "sin contacto"; return `<option value="${c.id}">${c.nombre_completo} — ${extra}</option>`; }).join("");
-}
-function llenarSelectCategorias() {
-  const sel = el("servicio-categoria"); if (!sel) return;
-  sel.innerHTML = `<option value="">Sin categoría</option>` + estado.categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join("");
 }
 
 // ============================================================================
@@ -285,41 +276,76 @@ async function verHistorialVehiculo(vehiculoId) {
 }
 
 // ============================================================================
-// CATÁLOGO DE SERVICIOS (tabla vieja "servicios")
+// V8b · CATÁLOGO UNIFICADO (catalogo_maestro)
 // ============================================================================
-async function cargarCatalogo(filtro = "") {
-  const { data } = await sb.from("servicios").select("*, categorias(nombre)").order("nombre");
-  let lista = data || [];
-  if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(s => (s.codigo||"").toLowerCase().includes(f) || (s.nombre||"").toLowerCase().includes(f)); }
-  el("tabla-catalogo").innerHTML = lista.length ? lista.map(s => `<tr><td>${s.codigo}</td><td>${s.nombre}</td><td>${s.categorias?s.categorias.nombre:"—"}</td><td>$${money(s.precio_venta)}</td><td>${s.estado}</td><td>${puedeEscribir()?`<button class="btn secundario pequeno" data-editar-servicio="${s.id}">Editar</button>`:""}</td></tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">Catálogo vacío.</td></tr>`;
-  document.querySelectorAll("[data-editar-servicio]").forEach(b => b.addEventListener("click", () => abrirModalServicio(lista.find(s => s.id === b.dataset.editarServicio))));
+let _catalogoCache = [];
+let _categoriasCache = [];
+const TIPO_CAT = { CONCEPTO_SERVICIO:"Servicio", CONCEPTO_REFACCION:"Refacción", CONCEPTO_MANO_OBRA:"Mano de obra", COMBO:"Combo" };
+function badgeTipoCatalogo(tipo) {
+  const clase = { CONCEPTO_SERVICIO:"azul", CONCEPTO_REFACCION:"verde", CONCEPTO_MANO_OBRA:"naranja", COMBO:"morado" }[tipo] || "gris";
+  return `<span class="badge ${clase}">${TIPO_CAT[tipo] || tipo}</span>`;
 }
-el("buscar-servicio").addEventListener("input", (e) => cargarCatalogo(e.target.value));
+async function cargarCatalogo() {
+  const [{ data: items, error }, { data: categorias }] = await Promise.all([
+    sb.rpc("catalogo_listar"), sb.rpc("cat_categorias")
+  ]);
+  if (error) {
+    el("tabla-catalogo").innerHTML = `<tr><td colspan="6" class="vacio-tabla">Error: ${error.message}. Ejecuta V8b_catalogo_funciones.sql.</td></tr>`;
+    return;
+  }
+  _catalogoCache = items || [];
+  _categoriasCache = categorias || [];
+  renderCatalogo();
+}
+function renderCatalogo() {
+  const texto = (el("buscar-servicio").value || "").toLowerCase();
+  const tipo = el("filtro-catalogo-tipo")?.value || "";
+  let lista = _catalogoCache;
+  if (texto) lista = lista.filter(x => (x.codigo||"").toLowerCase().includes(texto) || (x.nombre||"").toLowerCase().includes(texto));
+  if (tipo) lista = lista.filter(x => x.tipo === tipo);
+  el("tabla-catalogo").innerHTML = lista.length ? lista.map(x => `<tr>
+    <td>${x.codigo || "—"}</td><td>${x.nombre || "—"}</td><td>${badgeTipoCatalogo(x.tipo)}</td>
+    <td>${x.categoria_nombre || (x.tipo === "COMBO" ? "Combos / paquetes" : "—")}</td>
+    <td>${x.activo ? '<span class="badge verde">Activo</span>' : '<span class="badge gris">Inactivo</span>'}</td>
+    <td>${puedeEscribir() && x.tipo !== "COMBO" ? `<button class="btn secundario pequeno" data-editar-cat="${x.id}">Editar</button>` : ""}</td>
+  </tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">Sin resultados.</td></tr>`;
+  document.querySelectorAll("[data-editar-cat]").forEach(b => b.addEventListener("click", () => abrirModalServicio(_catalogoCache.find(x => String(x.id) === b.dataset.editarCat))));
+}
+el("buscar-servicio").addEventListener("input", renderCatalogo);
+el("filtro-catalogo-tipo")?.addEventListener("change", renderCatalogo);
 el("btn-nuevo-servicio").addEventListener("click", () => abrirModalServicio(null));
-function abrirModalServicio(s) {
-  el("titulo-modal-servicio").textContent = s ? "Editar servicio" : "Nuevo servicio";
-  el("servicio-id").value = s ? s.id : "";
-  el("servicio-codigo").value = s ? s.codigo : "";
-  el("servicio-nombre").value = s ? s.nombre : "";
-  el("servicio-categoria").value = s ? s.categoria_id || "" : "";
-  el("servicio-unidad").value = s ? s.unidad_medida : "servicio";
-  el("servicio-precio").value = s ? s.precio_venta : "";
-  el("servicio-costo").value = s ? s.costo_interno || "" : "";
-  el("servicio-impuesto").value = s ? s.impuesto || 0 : 0;
-  el("servicio-estado").value = s ? s.estado : "activo";
-  el("servicio-descripcion").value = s ? s.descripcion || "" : "";
+function llenarCategoriasConcepto() {
+  el("servicio-categoria").innerHTML = `<option value="">Selecciona…</option>` + _categoriasCache.filter(c => c.codigo !== "COM").map(c => `<option value="${c.codigo}">${c.nombre}</option>`).join("");
+}
+function abrirModalServicio(x) {
+  llenarCategoriasConcepto();
+  el("titulo-modal-servicio").textContent = x ? "Editar concepto" : "Nuevo concepto";
+  el("servicio-id").value = x ? x.id : "";
+  el("servicio-tipo").value = x ? x.tipo : "CONCEPTO_SERVICIO";
+  el("servicio-tipo").disabled = !!x;
+  el("servicio-categoria").value = x ? (x.categoria_codigo || "") : "";
+  el("servicio-nombre").value = x ? (x.nombre || "") : "";
+  el("servicio-codigo").value = x ? (x.codigo || "") : "";
+  el("servicio-codigo").disabled = !!x;
+  el("servicio-estado").value = x && !x.activo ? "false" : "true";
   abrirModal("modal-servicio");
 }
-el("form-servicio").addEventListener("submit", async (ev) => {
+el("form-servicio").addEventListener("submit", async ev => {
   ev.preventDefault();
-  if (!esAdmin()) { mostrarMensaje("mensaje-servicio", "Solo un administrador puede modificar el catálogo.", "error"); return; }
   const id = el("servicio-id").value;
-  const registro = { codigo: el("servicio-codigo").value.trim(), nombre: el("servicio-nombre").value.trim(), categoria_id: el("servicio-categoria").value || null, unidad_medida: el("servicio-unidad").value.trim() || "servicio", precio_venta: Number(el("servicio-precio").value || 0), costo_interno: el("servicio-costo").value ? Number(el("servicio-costo").value) : null, impuesto: Number(el("servicio-impuesto").value || 0), estado: el("servicio-estado").value, descripcion: el("servicio-descripcion").value.trim() || null };
-  let error;
-  if (id) { ({ error } = await sb.from("servicios").update(registro).eq("id", id)); if (!error) await registrarBitacora("servicios", id, "actualizar", null, registro); }
-  else { const { data, error: e2 } = await sb.from("servicios").insert(registro).select().single(); error = e2; if (!error) await registrarBitacora("servicios", data.id, "crear", null, registro); }
-  if (error) { mostrarMensaje("mensaje-servicio", "Error al guardar: " + error.message, "error"); return; }
-  cerrarModal("modal-servicio"); await cargarDatosBase(); cargarCatalogo();
+  const nombre = el("servicio-nombre").value.trim();
+  const categoria = el("servicio-categoria").value;
+  if (!nombre || !categoria) { mostrarMensaje("mensaje-servicio", "Nombre y categoría son obligatorios.", "error"); return; }
+  if (id) {
+    const { error } = await sb.rpc("catalogo_editar", { p_id:Number(id), p_nombre:nombre, p_categoria_codigo:categoria, p_activo:el("servicio-estado").value === "true" });
+    if (error) { mostrarMensaje("mensaje-servicio", "Error: " + error.message, "error"); return; }
+  } else {
+    const { error } = await sb.rpc("crear_concepto", { p_tipo:el("servicio-tipo").value, p_nombre:nombre, p_categoria_codigo:categoria, p_codigo:el("servicio-codigo").value.trim() || null });
+    if (error) { mostrarMensaje("mensaje-servicio", "Error: " + error.message, "error"); return; }
+  }
+  mostrarMensaje("mensaje-servicio", "Concepto guardado correctamente.");
+  await cargarCatalogo();
+  setTimeout(() => cerrarModal("modal-servicio"), 700);
 });
 
 // ============================================================================
@@ -712,43 +738,57 @@ el("btn-agregar-seguimiento").addEventListener("click", async () => {
 });
 
 // ============================================================================
-// IMPORTACIÓN MASIVA (CSV)
+// V8b · IMPORTACIÓN MASIVA A catalogo_maestro + descarga de plantilla
 // ============================================================================
+el("btn-descargar-plantilla")?.addEventListener("click", () => {
+  const csv = "tipo,codigo,nombre,categoria_codigo\n" +
+    "CONCEPTO_SERVICIO,MNT-100,Cambio de aceite sintetico,MNT\n" +
+    "CONCEPTO_REFACCION,REF-100,Filtro de aire premium,MNT\n" +
+    "CONCEPTO_MANO_OBRA,MO-100,Mano de obra diagnostico,DIA\n";
+  const blob = new Blob(["\ufeff" + csv], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "plantilla_catalogo.csv";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
 let _registrosImportacion = [];
-el("input-importar").addEventListener("change", async (ev) => {
+el("input-importar").addEventListener("change", async ev => {
   const archivo = ev.target.files[0]; if (!archivo) return;
   const filas = parseCSV(await archivo.text());
-  if (!filas.length) { mostrarMensaje("mensaje-importacion", "El archivo está vacío.", "error"); return; }
-  const encabezados = filas[0].map(h => h.trim().toLowerCase());
-  const requeridos = ["codigo","nombre","categoria","unidad_medida","precio_venta","estado"];
-  const faltantes = requeridos.filter(r => !encabezados.includes(r));
-  if (faltantes.length) { mostrarMensaje("mensaje-importacion", "Faltan columnas: " + faltantes.join(", "), "error"); return; }
-  _registrosImportacion = filas.slice(1).filter(f => f.some(c => c.trim() !== "")).map(f => { const o = {}; encabezados.forEach((h,i)=>o[h]=(f[i]||"").trim()); return o; });
-  const existentes = new Set(estado.servicios.map(s => s.codigo));
-  let previa = `<table class="tabla"><thead><tr><th>Código</th><th>Nombre</th><th>Precio</th><th>Estado</th></tr></thead><tbody>`;
-  _registrosImportacion.forEach(r => previa += `<tr><td>${r.codigo}</td><td>${r.nombre}</td><td>$${r.precio_venta}</td><td>${existentes.has(r.codigo)?"Actualiza":"Nuevo"}</td></tr>`);
-  previa += `</tbody></table><button class="btn" id="btn-confirmar-importacion" style="margin-top:10px;">Aplicar ${_registrosImportacion.length} registro(s)</button>`;
-  el("previa-importacion").innerHTML = previa;
+  if (filas.length < 2) { mostrarMensaje("mensaje-importacion", "El archivo no contiene registros.", "error"); return; }
+  const encabezados = filas[0].map(x => x.trim().toLowerCase());
+  const requeridos = ["tipo","codigo","nombre","categoria_codigo"];
+  const faltantes = requeridos.filter(x => !encabezados.includes(x));
+  if (faltantes.length) { mostrarMensaje("mensaje-importacion", "Faltan columnas: " + faltantes.join(", ") + ". Descarga la plantilla.", "error"); return; }
+  _registrosImportacion = filas.slice(1).filter(r => r.some(v => v.trim())).map(r => Object.fromEntries(encabezados.map((h,i) => [h,(r[i]||"").trim()])));
+  const validos = new Set(["CONCEPTO_SERVICIO","CONCEPTO_REFACCION","CONCEPTO_MANO_OBRA"]);
+  const errores = _registrosImportacion.filter(r => !validos.has(r.tipo) || !r.codigo || !r.nombre || !r.categoria_codigo);
+  if (errores.length) { mostrarMensaje("mensaje-importacion", `${errores.length} fila(s) tienen datos inválidos. Revisa tipo, código, nombre y categoría.`, "error"); return; }
+  const existentes = new Set(_catalogoCache.map(x => (x.codigo||"").toUpperCase()));
+  el("previa-importacion").innerHTML = `<table class="tabla"><thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Categoría</th><th>Acción</th></tr></thead><tbody>` +
+    _registrosImportacion.map(r => `<tr><td>${TIPO_CAT[r.tipo]||r.tipo}</td><td>${r.codigo}</td><td>${r.nombre}</td><td>${r.categoria_codigo}</td><td>${existentes.has(r.codigo.toUpperCase()) ? "Actualizar" : "Crear"}</td></tr>`).join("") +
+    `</tbody></table><button class="btn" id="btn-confirmar-importacion" style="margin-top:12px;">Importar ${_registrosImportacion.length} registro(s)</button>`;
   el("btn-confirmar-importacion").addEventListener("click", aplicarImportacion);
 });
 async function aplicarImportacion() {
-  if (!esAdmin()) { mostrarMensaje("mensaje-importacion", "Solo un administrador puede aplicar importaciones.", "error"); return; }
-  const existentes = new Set(estado.servicios.map(s => s.codigo));
-  let nuevos=0, actualizados=0, errores=0;
-  for (const r of _registrosImportacion) {
-    const registro = { codigo:r.codigo, nombre:r.nombre, descripcion:r.descripcion||null, unidad_medida:r.unidad_medida||"servicio", precio_venta:Number(r.precio_venta||0), costo_interno:r.costo_interno?Number(r.costo_interno):null, impuesto:r.impuesto?Number(r.impuesto):0, estado:r.estado||"activo", observaciones:r.observaciones||null };
-    const { error } = await sb.from("servicios").upsert(registro, { onConflict: "codigo" });
-    if (error) { errores++; continue; }
-    existentes.has(r.codigo) ? actualizados++ : nuevos++;
-  }
-  const resumen = { total:_registrosImportacion.length, nuevos, actualizados, errores };
-  await sb.from("importaciones").insert({ archivo_nombre:"importacion", resumen, usuario_id: estado.usuario.id });
-  await registrarBitacora("servicios", null, "importacion_masiva", null, resumen);
-  mostrarMensaje("mensaje-importacion", `Importación aplicada: ${nuevos} nuevos, ${actualizados} actualizados, ${errores} con error.`);
+  const { data, error } = await sb.rpc("catalogo_importar", { p_filas:_registrosImportacion });
+  if (error) { mostrarMensaje("mensaje-importacion", "Error: " + error.message, "error"); return; }
+  mostrarMensaje("mensaje-importacion", `Importación terminada: ${data.nuevos} nuevos y ${data.actualizados} actualizados.`);
   el("previa-importacion").innerHTML = ""; el("input-importar").value = ""; _registrosImportacion = [];
-  await cargarDatosBase();
+  await cargarCatalogo();
 }
-function parseCSV(texto) { return texto.trim().split(/\r?\n/).map(l => l.split(",").map(c => c.trim())); }
+function parseCSV(texto) {
+  const rows=[]; let row=[], cell="", quote=false;
+  for (let i=0;i<texto.length;i++) {
+    const ch=texto[i], next=texto[i+1];
+    if (ch==='"' && quote && next==='"') { cell+='"'; i++; }
+    else if (ch==='"') quote=!quote;
+    else if (ch===',' && !quote) { row.push(cell); cell=""; }
+    else if ((ch==='\n' || ch==='\r') && !quote) { if (ch==='\r' && next==='\n') i++; row.push(cell); if (row.some(v=>v.trim())) rows.push(row); row=[]; cell=""; }
+    else cell+=ch;
+  }
+  row.push(cell); if (row.some(v=>v.trim())) rows.push(row);
+  return rows;
+}
 
 // ============================================================================
 // ARCHIVOS ADJUNTOS
@@ -1019,5 +1059,5 @@ el("btn-guardar-combo")?.addEventListener("click", async () => {
   if (error) { mostrarMensaje("mensaje-combo", "Error: " + error.message, "error"); return; }
   await registrarBitacora("catalogo_maestro", null, "crear_combo", null, { combo: data, nombre, items: _comboItems.length });
   mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
-  setTimeout(() => cerrarModal("modal-combo"), 1200);
+  setTimeout(() => { cerrarModal("modal-combo"); cargarCatalogo(); }, 1200);
 });
