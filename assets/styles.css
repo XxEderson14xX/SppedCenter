@@ -1,5 +1,5 @@
 /* ============================================================================
-   Sistema Taller Automotriz · styles.css · Versión V8b
+   Sistema Taller Automotriz · styles.css · Versión V8
    Base + badges + inline (V6) + gate pagos/botón peligro (V7) +
    cascada de catálogo y homologación visual (V8).
    ============================================================================ */
@@ -164,7 +164,5 @@ a { color:var(--teal); }
   .form-grid, .form-grid.dos { grid-template-columns:1fr; }
 }
 
-/* V8b · catálogo unificado */
-.badge.morado { background:#f0e9f7; color:#70459e; border-color:#d8c5eb; }
-#filtro-catalogo-tipo { min-width:190px; }
-#previa-importacion { margin-top:16px; overflow-x:auto; }
+/* V9 */
+.v9-descuento{display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin:6px 0}.v9-descuento input[type=radio]{width:auto}.v9-descuento input[type=number]{width:100px}.v9-check{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--border)}.v9-check input{width:20px;height:20px}.v9-progreso{height:8px;background:#e6ebef;border-radius:20px;overflow:hidden}.v9-progreso span{display:block;height:100%;background:var(--teal)}.v9-adicional{padding:10px;border:1px solid var(--border);border-radius:8px;margin:8px 0}.v9-lock{background:#f4f6f8!important;opacity:.75}.badge.morado{background:#f0e9f7;color:#70459e;border-color:#d8c5eb}
