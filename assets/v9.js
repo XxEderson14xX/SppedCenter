@@ -20,8 +20,201 @@ $('btn-v9-adicional')?.addEventListener('click',()=>abrirModal('modal-v9-adicion
 async function cargarOT(){let q=sb.rpc('ordenes_trabajo_listar');const {data}=await q;let l=data||[];if(estado.perfil?.rol==='tecnico')l=l.filter(x=>x.tecnico_id===estado.usuario.id);window.v9OT=l;renderOT();}
 function renderOT(){const txt=($('buscar-orden').value||'').toLowerCase(),f=$('filtro-orden').value;let l=window.v9OT||[];if(txt)l=l.filter(x=>[x.folio,x.cotizacion_folio,x.placa].some(v=>(v||'').toLowerCase().includes(txt)));if(f)l=l.filter(x=>x.estado===f);$('tabla-ordenes').innerHTML=l.map(x=>`<tr><td>${x.folio}</td><td>${x.cotizacion_folio}</td><td>${x.placa} · ${x.vehiculo}</td><td>${x.tecnico||'Sin asignar'}</td><td>${x.realizados}/${x.total}</td><td>${x.estado}</td><td><button class="btn secundario pequeno" data-ot="${x.id}">Abrir</button></td></tr>`).join('');document.querySelectorAll('[data-ot]').forEach(b=>b.onclick=()=>abrirOT(b.dataset.ot));}
 $('buscar-orden')?.addEventListener('input',renderOT);$('filtro-orden')?.addEventListener('change',renderOT);$('btn-v9-ot')?.addEventListener('click',async()=>{const {data,error}=await sb.rpc('generar_orden_trabajo',{p_cotizacion_id:$('cotizacion-id').value});if(!error)abrirOT(data)});
-async function abrirOT(id){otId=id;const [{data:o},{data:d},{data:t}]=await Promise.all([sb.from('ordenes_trabajo').select('*,cotizaciones(folio),vehiculos(placa,marca,modelo)').eq('id',id).single(),sb.from('orden_trabajo_detalle').select('*').eq('orden_trabajo_id',id).order('created_at'),sb.from('perfiles').select('id,nombre_completo').eq('rol','tecnico').eq('activo',true)]);$('v9-ot-titulo').textContent=`Orden ${o.folio}`;$('v9-ot-resumen').innerHTML=`<p><b>Cotización:</b> ${o.cotizaciones?.folio} · <b>Vehículo:</b> ${o.vehiculos?.placa} ${o.vehiculos?.marca} ${o.vehiculos?.modelo}</p>`;$('v9-ot-tecnico').innerHTML='<option value="">Sin asignar</option>'+(t||[]).map(x=>`<option value="${x.id}" ${x.id===o.tecnico_id?'selected':''}>${x.nombre_completo}</option>`).join('');$('v9-ot-asignacion').style.display=estado.perfil?.rol==='tecnico'?'none':'block';$('v9-ot-trabajos').innerHTML=(d||[]).map(x=>`<label class="v9-check"><input data-check="${x.id}" type="checkbox" ${x.realizado?'checked':''}><span>${x.descripcion}</span></label>`).join('');$('v9-ot-observaciones').value=o.observaciones||'';abrirModal('modal-v9-orden')}
-$('v9-guardar-ot')?.addEventListener('click',async()=>{const checks=[...document.querySelectorAll('[data-check]')].map(x=>({id:x.dataset.check,realizado:x.checked}));await sb.rpc('guardar_avance_orden',{p_orden_id:otId,p_checks:checks,p_observaciones:$('v9-ot-observaciones').value,p_tecnico_id:$('v9-ot-tecnico').value||null});cerrarModal('modal-v9-orden');cargarOT()});$('v9-finalizar-ot')?.addEventListener('click',async()=>{if(confirm('¿Todo el trabajo autorizado fue realizado?')){await sb.rpc('finalizar_orden',{p_orden_id:otId});cerrarModal('modal-v9-orden');cargarOT()}});$('v9-imprimir-ot')?.addEventListener('click',()=>{const w=window.open('','_blank');w.document.write(`<h1>${$('v9-ot-titulo').textContent}</h1>${$('v9-ot-resumen').innerHTML}<h2>Trabajos autorizados</h2>${[...document.querySelectorAll('[data-check]')].map(x=>`<p>☐ ${x.parentElement.innerText}</p>`).join('')}<h2>Refacciones / caja</h2><p>Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</p><h2>Observaciones</h2><p>___________________________________</p><p>___________________________________</p>`);w.print()});
+function obtenerChecksOT() {
+    return [...document.querySelectorAll('[data-check]')];
+}
+
+function obtenerAvanceOT() {
+    const checks = obtenerChecksOT();
+    const total = checks.length;
+    const realizados = checks.filter(x => x.checked).length;
+    const pendientes = total - realizados;
+    const porcentaje = total ? Math.round((realizados / total) * 100) : 0;
+    return { total, realizados, pendientes, porcentaje };
+}
+
+function actualizarAvanceOT() {
+    const avance = obtenerAvanceOT();
+    const contador = $('v9-ot-contador');
+    const porcentaje = $('v9-ot-porcentaje');
+    const barra = $('v9-ot-barra');
+    const seleccionarTodos = $('v9-seleccionar-todos');
+    const finalizar = $('v9-finalizar-ot');
+    const ayuda = $('v9-finalizar-ayuda');
+    if (contador) contador.textContent = `${avance.realizados} de ${avance.total} realizados`;
+    if (porcentaje) porcentaje.textContent = `${avance.porcentaje}%`;
+    if (barra) barra.style.width = `${avance.porcentaje}%`;
+    if (seleccionarTodos) {
+        seleccionarTodos.indeterminate = avance.realizados > 0 && avance.realizados < avance.total;
+        seleccionarTodos.checked = avance.total > 0 && avance.realizados === avance.total;
+    }
+    if (finalizar && !window.v9OTTerminada) {
+        const completo = avance.total > 0 && avance.realizados === avance.total;
+        finalizar.disabled = !completo;
+        finalizar.style.opacity = completo ? '1' : '0.55';
+        finalizar.style.cursor = completo ? 'pointer' : 'not-allowed';
+        if (ayuda) {
+            ayuda.textContent = completo
+                ? 'Todos los trabajos estan realizados. La OT puede finalizarse.'
+                : avance.total
+                    ? `Faltan ${avance.pendientes} trabajos por completar.`
+                    : 'La orden no contiene trabajos.';
+            ayuda.style.color = completo ? '#18794e' : '#9a6700';
+        }
+    }
+}
+
+function configurarSeleccionTodosOT() {
+    const seleccionarTodos = $('v9-seleccionar-todos');
+    if (!seleccionarTodos) return;
+    seleccionarTodos.onchange = () => {
+        if (window.v9OTTerminada) return;
+        const valor = seleccionarTodos.checked;
+        obtenerChecksOT().forEach(check => { check.checked = valor; });
+        actualizarAvanceOT();
+    };
+}
+
+function configurarChecksOT() {
+    obtenerChecksOT().forEach(check => {
+        check.onchange = () => {
+            if (window.v9OTTerminada) return;
+            actualizarAvanceOT();
+        };
+    });
+}
+
+function aplicarModoOT(terminada) {
+    window.v9OTTerminada = terminada;
+    const tecnico = $('v9-ot-tecnico');
+    const observaciones = $('v9-ot-observaciones');
+    const guardar = $('v9-guardar-ot');
+    const finalizar = $('v9-finalizar-ot');
+    const seleccionarTodos = $('v9-seleccionar-todos');
+    const estadoVisual = $('v9-ot-estado-visual');
+    if (terminada) {
+        if (tecnico) tecnico.disabled = true;
+        if (observaciones) observaciones.disabled = true;
+        obtenerChecksOT().forEach(x => { x.disabled = true; });
+        if (seleccionarTodos) {
+            seleccionarTodos.disabled = true;
+            const c = seleccionarTodos.closest('.v9-seleccionar-todos-contenedor');
+            if (c) c.style.display = 'none';
+        }
+        if (guardar) guardar.style.display = 'none';
+        if (finalizar) finalizar.style.display = 'none';
+        if (estadoVisual) {
+            estadoVisual.textContent = 'TERMINADA';
+            estadoVisual.className = 'v9-ot-estado v9-ot-estado-terminada';
+        }
+    } else {
+        if (tecnico) tecnico.disabled = false;
+        if (observaciones) observaciones.disabled = false;
+        obtenerChecksOT().forEach(x => { x.disabled = false; });
+        if (seleccionarTodos) {
+            seleccionarTodos.disabled = false;
+            const c = seleccionarTodos.closest('.v9-seleccionar-todos-contenedor');
+            if (c) c.style.display = '';
+        }
+        if (guardar) guardar.style.display = '';
+        if (finalizar) finalizar.style.display = '';
+        if (estadoVisual) {
+            estadoVisual.textContent = 'ABIERTA';
+            estadoVisual.className = 'v9-ot-estado v9-ot-estado-abierta';
+        }
+    }
+    actualizarAvanceOT();
+}
+
+async function abrirOT(id) {
+    otId = id;
+    const [
+        { data: o, error: errorOrden },
+        { data: d, error: errorDetalle },
+        { data: t, error: errorTecnicos }
+    ] = await Promise.all([
+        sb.from('ordenes_trabajo').select('*,cotizaciones(folio),vehiculos(placa,marca,modelo)').eq('id',id).single(),
+        sb.from('orden_trabajo_detalle').select('*').eq('orden_trabajo_id',id).order('created_at'),
+        sb.from('perfiles').select('id,nombre_completo').eq('rol','tecnico').eq('activo',true)
+    ]);
+    if (errorOrden) { console.error('Error al cargar OT:', errorOrden); alert('No fue posible cargar la orden de trabajo.'); return; }
+    if (errorDetalle) { console.error('Error al cargar detalle OT:', errorDetalle); alert('No fue posible cargar los trabajos de la orden.'); return; }
+    if (errorTecnicos) console.error('Error al cargar tecnicos:', errorTecnicos);
+
+    $('v9-ot-titulo').textContent = `Orden ${o.folio}`;
+    $('v9-ot-resumen').innerHTML = `
+        <div class="v9-ot-resumen-grid">
+            <div><small>Cotizacion</small><strong>${o.cotizaciones?.folio || '—'}</strong></div>
+            <div><small>Vehiculo</small><strong>${o.vehiculos?.placa || '—'} · ${o.vehiculos?.marca || ''} ${o.vehiculos?.modelo || ''}</strong></div>
+            <div><small>Estado</small><strong id="v9-ot-estado-visual" class="v9-ot-estado">${o.estado === 'terminada' ? 'TERMINADA' : 'ABIERTA'}</strong></div>
+        </div>`;
+    $('v9-ot-tecnico').innerHTML = '<option value="">Sin asignar</option>' + (t || []).map(x => `<option value="${x.id}" ${x.id === o.tecnico_id ? 'selected' : ''}>${x.nombre_completo}</option>`).join('');
+    $('v9-ot-asignacion').style.display = estado.perfil?.rol === 'tecnico' ? 'none' : 'block';
+    $('v9-ot-trabajos').innerHTML = `
+        <div class="v9-avance-cabecera">
+            <div><strong>Avance del servicio</strong><div id="v9-ot-contador" class="v9-avance-contador">0 de 0 realizados</div></div>
+            <div id="v9-ot-porcentaje" class="v9-avance-porcentaje">0%</div>
+        </div>
+        <div class="v9-progreso v9-progreso-ot"><span id="v9-ot-barra" style="width:0%"></span></div>
+        <label class="v9-seleccionar-todos-contenedor"><input id="v9-seleccionar-todos" type="checkbox"><strong>Seleccionar todos los trabajos</strong></label>
+        <div class="v9-lista-trabajos">${(d || []).map(x => `<label class="v9-check"><input data-check="${x.id}" type="checkbox" ${x.realizado ? 'checked' : ''}><span>${x.descripcion}</span></label>`).join('')}</div>
+        <div id="v9-finalizar-ayuda" class="v9-finalizar-ayuda"></div>`;
+    $('v9-ot-observaciones').value = o.observaciones || '';
+    configurarSeleccionTodosOT();
+    configurarChecksOT();
+    aplicarModoOT(o.estado === 'terminada');
+    abrirModal('modal-v9-orden');
+}
+
+$('v9-guardar-ot')?.addEventListener('click', async () => {
+    if (!otId) return;
+    if (window.v9OTTerminada) { alert('Esta orden ya esta terminada y no puede modificarse.'); return; }
+    const checks = obtenerChecksOT().map(x => ({ id:x.dataset.check, realizado:x.checked }));
+    const boton = $('v9-guardar-ot');
+    const textoOriginal = boton.textContent;
+    boton.disabled = true; boton.textContent = 'Guardando...';
+    const { error } = await sb.rpc('guardar_avance_orden', {
+        p_orden_id:otId,
+        p_checks:checks,
+        p_observaciones:$('v9-ot-observaciones').value,
+        p_tecnico_id:$('v9-ot-tecnico').value || null
+    });
+    boton.disabled = false; boton.textContent = textoOriginal;
+    if (error) { console.error('Error al guardar avance:', error); alert(error.message || 'No fue posible guardar el avance.'); return; }
+    await cargarOT();
+    actualizarAvanceOT();
+    alert('Avance guardado correctamente.');
+});
+
+$('v9-finalizar-ot')?.addEventListener('click', async () => {
+    if (!otId || window.v9OTTerminada) return;
+    const avance = obtenerAvanceOT();
+    if (!avance.total) { alert('La orden no contiene trabajos para finalizar.'); return; }
+    if (avance.pendientes > 0) {
+        alert(`No puedes finalizar esta orden.\n\nAvance: ${avance.realizados} de ${avance.total}.\nQuedan ${avance.pendientes} trabajos pendientes.`);
+        return;
+    }
+    if (!confirm(`Finalizar orden de trabajo\n\n${avance.realizados} de ${avance.total} trabajos estan realizados.\n\nLa orden quedara marcada como terminada.\n\n¿Deseas continuar?`)) return;
+    const boton = $('v9-finalizar-ot');
+    const textoOriginal = boton.textContent;
+    boton.disabled = true; boton.textContent = 'Finalizando...';
+    const { error } = await sb.rpc('finalizar_orden',{p_orden_id:otId});
+    if (error) {
+        console.error('Error al finalizar OT:', error);
+        boton.disabled = false; boton.textContent = textoOriginal;
+        alert(error.message || 'No fue posible finalizar la orden.');
+        return;
+    }
+    await cargarOT();
+    cerrarModal('modal-v9-orden');
+});
+
+$('v9-imprimir-ot')?.addEventListener('click', () => {
+    const avance = obtenerAvanceOT();
+    const w = window.open('','_blank');
+    w.document.write(`<html><head><title>${$('v9-ot-titulo').textContent}</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1b2f4a}h1{border-bottom:2px solid #1b7884;padding-bottom:10px}h2{margin-top:28px;font-size:18px}.trabajo{padding:8px 0;border-bottom:1px solid #ddd}.avance{margin:15px 0;font-weight:bold}</style></head><body><h1>${$('v9-ot-titulo').textContent}</h1>${$('v9-ot-resumen').innerHTML}<h2>Trabajos autorizados</h2><div class="avance">Avance: ${avance.realizados} de ${avance.total} (${avance.porcentaje}%)</div>${obtenerChecksOT().map(x => `<div class="trabajo">${x.checked ? '☑' : '☐'} ${x.parentElement.innerText}</div>`).join('')}<h2>Refacciones / caja</h2><p>Las piezas retiradas deberan colocarse en la caja correspondiente al vehiculo.</p><h2>Observaciones</h2><p>${$('v9-ot-observaciones').value || 'Sin observaciones.'}</p></body></html>`);
+    w.document.close(); w.focus(); w.print();
+});
 // carga operativa (sin ranking)
 async function cargarCarga(){if(!admin())return;const mes=$('carga-mes').value||new Date().toISOString().slice(0,7);$('carga-mes').value=mes;const {data}=await sb.rpc('carga_trabajo_operativa',{p_mes:mes});$('carga-tecnicos').innerHTML=(data||[]).map(x=>`<div class="panel"><h3>${x.tecnico}</h3><p>Órdenes abiertas: <b>${x.ordenes_abiertas}</b> · Trabajos pendientes: <b>${x.trabajos_pendientes}</b> · Órdenes atendidas en el mes: <b>${x.ordenes_mes}</b></p></div>`).join('')||'<div class="panel">Sin datos.</div>'}$('carga-mes')?.addEventListener('change',cargarCarga);
 // ingresos: consulta únicamente
