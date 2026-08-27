@@ -20,6 +20,14 @@ $('btn-v9-adicional')?.addEventListener('click',()=>abrirModal('modal-v9-adicion
 async function cargarOT(){let q=sb.rpc('ordenes_trabajo_listar');const {data}=await q;let l=data||[];if(estado.perfil?.rol==='tecnico')l=l.filter(x=>x.tecnico_id===estado.usuario.id);window.v9OT=l;renderOT();}
 function renderOT(){const txt=($('buscar-orden').value||'').toLowerCase(),f=$('filtro-orden').value;let l=window.v9OT||[];if(txt)l=l.filter(x=>[x.folio,x.cotizacion_folio,x.placa].some(v=>(v||'').toLowerCase().includes(txt)));if(f)l=l.filter(x=>x.estado===f);$('tabla-ordenes').innerHTML=l.map(x=>`<tr><td>${x.folio}</td><td>${x.cotizacion_folio}</td><td>${x.placa} · ${x.vehiculo}</td><td>${x.tecnico||'Sin asignar'}</td><td>${x.realizados}/${x.total}</td><td>${x.estado}</td><td><button class="btn secundario pequeno" data-ot="${x.id}">Abrir</button></td></tr>`).join('');document.querySelectorAll('[data-ot]').forEach(b=>b.onclick=()=>abrirOT(b.dataset.ot));}
 $('buscar-orden')?.addEventListener('input',renderOT);$('filtro-orden')?.addEventListener('change',renderOT);$('btn-v9-ot')?.addEventListener('click',async()=>{const {data,error}=await sb.rpc('generar_orden_trabajo',{p_cotizacion_id:$('cotizacion-id').value});if(!error)abrirOT(data)});
+// V9.1.4 - cerrar cualquier modal V9 por su boton X
+document.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-cerrar-modal]');
+    if (!btn) return;
+    const id = btn.dataset.cerrarModal;
+    if (id && document.getElementById(id)) cerrarModal(id);
+});
+
 function obtenerChecksOT() {
     return [...document.querySelectorAll('[data-check]')];
 }
@@ -182,8 +190,7 @@ $('v9-guardar-ot')?.addEventListener('click', async () => {
     boton.disabled = false; boton.textContent = textoOriginal;
     if (error) { console.error('Error al guardar avance:', error); alert(error.message || 'No fue posible guardar el avance.'); return; }
     await cargarOT();
-    actualizarAvanceOT();
-    alert('Avance guardado correctamente.');
+    cerrarModal('modal-v9-orden');
 });
 
 $('v9-finalizar-ot')?.addEventListener('click', async () => {
