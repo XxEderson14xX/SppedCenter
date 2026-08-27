@@ -25,12 +25,16 @@
 <!-- ======================= APP ======================= -->
 <div id="app-shell">
   <nav id="nav-lateral">
-    <div class="marca">Taller Automotriz<small>Panel operativo · MVP V8</small></div>
+    <div class="marca">Taller Automotriz<small>Panel operativo · V9</small></div>
     <a class="nav-item activo" data-modulo="inicio">Inicio</a>
     <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
+    <a class="nav-item" data-modulo="ordenes">Órdenes de trabajo</a>
+    <a class="nav-item" data-admin-only data-modulo="carga">Carga de trabajo</a>
+    <a class="nav-item" data-modulo="ingresos">Ingresos</a>
+    <a class="nav-item" data-modulo="herramientas">Herramienta especial</a>
     <a class="nav-item" data-modulo="clientes">Clientes</a>
     <a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a>
-    <a class="nav-item" data-modulo="catalogo">Catálogo</a>
+    <a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a>
     <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
     <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
     <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
@@ -50,6 +54,7 @@
         <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">En proceso</div></div>
         <div class="kpi acento-navy"><div class="valor">—</div><div class="etiqueta">Con saldo pendiente</div></div>
       </div>
+      <div class="panel"><h3>Operación de hoy</h3><div class="kpis"><div class="kpi"><div class="valor" id="dash-ot-abiertas">0</div><div class="etiqueta">Órdenes abiertas</div></div><div class="kpi acento-naranja"><div class="valor" id="dash-trabajos-pendientes">0</div><div class="etiqueta">Trabajos pendientes</div></div><div class="kpi acento-verde"><div class="valor" id="dash-ot-terminadas">0</div><div class="etiqueta">Órdenes terminadas hoy</div></div><div class="kpi acento-navy"><div class="valor" id="dash-ingresos-hoy">$0.00</div><div class="etiqueta">Ingresos hoy</div></div></div><h3>Avance</h3><div id="dash-avance-ordenes"></div><h3 style="margin-top:18px;">Herramienta especial</h3><div id="dash-herramientas"></div><h3 style="margin-top:18px;">Últimos pagos</h3><div id="dash-pagos"></div></div>
       <div class="panel">
         <h3>Actividad reciente</h3>
         <table class="tabla">
@@ -90,6 +95,14 @@
         </table>
       </div>
     </section>
+    <!-- V9: ÓRDENES -->
+    <section class="modulo" id="modulo-ordenes"><div class="encabezado-modulo"><div><h2>Órdenes de trabajo</h2><p>Trabajos autorizados, técnico y avance por checks.</p></div></div><div class="barra-acciones"><input type="search" id="buscar-orden" placeholder="Buscar OT, cotización o placa…"><select id="filtro-orden"><option value="">Todas</option><option value="abierta">Abiertas</option><option value="terminada">Terminadas</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>OT</th><th>Cotización</th><th>Vehículo</th><th>Técnico</th><th>Avance</th><th>Estado</th><th></th></tr></thead><tbody id="tabla-ordenes"></tbody></table></div></section>
+    <!-- V9: CARGA OPERATIVA. Sin score ni ranking. -->
+    <section class="modulo" id="modulo-carga"><div class="encabezado-modulo"><div><h2>Carga de trabajo</h2><p>Distribución operativa de órdenes. No genera rankings ni evaluaciones.</p></div><input type="month" id="carga-mes"></div><div id="carga-tecnicos"></div></section>
+    <!-- V9: INGRESOS, solo consulta -->
+    <section class="modulo" id="modulo-ingresos"><div class="encabezado-modulo"><div><h2>Ingresos</h2><p>Consulta de pagos registrados desde cotizaciones.</p></div></div><div class="barra-acciones"><input type="date" id="ingresos-fecha"><select id="ingresos-metodo"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select></div><div class="kpis"><div class="kpi"><div class="valor" id="ing-total">$0.00</div><div class="etiqueta">Total válido</div></div><div class="kpi"><div class="valor" id="ing-efectivo">$0.00</div><div class="etiqueta">Efectivo</div></div><div class="kpi"><div class="valor" id="ing-transferencia">$0.00</div><div class="etiqueta">Transferencia</div></div><div class="kpi"><div class="valor" id="ing-tarjeta">$0.00</div><div class="etiqueta">Tarjeta</div></div></div><div class="panel"><table class="tabla"><thead><tr><th>Hora</th><th>Cotización</th><th>Cliente / placa</th><th>Método</th><th>Referencia</th><th>Importe</th><th>Estado</th></tr></thead><tbody id="tabla-ingresos"></tbody></table></div></section>
+    <!-- V9: HERRAMIENTA ESPECIAL -->
+    <section class="modulo" id="modulo-herramientas"><div class="encabezado-modulo"><div><h2>Herramienta especial</h2><p>Control de custodia y disponibilidad.</p></div><button class="btn" data-admin-only id="btn-nueva-herramienta">+ Nueva herramienta</button></div><div class="barra-acciones"><input type="search" id="buscar-herramienta" placeholder="Buscar herramienta…"><select id="filtro-herramienta"><option value="">Todas</option><option value="disponible">Disponibles</option><option value="prestada">Prestadas</option><option value="fuera_servicio">Fuera de servicio</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>ID</th><th>Herramienta</th><th>Estado</th><th>Asignada a</th><th>Desde</th><th></th></tr></thead><tbody id="tabla-herramientas"></tbody></table></div></section>
     <!-- CLIENTES -->
     <section class="modulo" id="modulo-clientes">
       <div class="encabezado-modulo">
@@ -118,45 +131,30 @@
         </table>
       </div>
     </section>
-    <!-- CATÁLOGO V8b: fuente única catalogo_maestro -->
+    <!-- CATÁLOGO -->
     <section class="modulo" id="modulo-catalogo">
       <div class="encabezado-modulo">
-        <div><h2>Catálogo</h2><p>Servicios, refacciones, mano de obra y combos del taller</p></div>
+        <div><h2>Catálogo de servicios</h2><p>Servicios, mano de obra, consumibles y combos</p></div>
         <div style="display:flex; gap:8px;">
-          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo concepto</button>
+          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo servicio</button>
           <button class="btn secundario solo-staff" id="btn-nuevo-combo">🎁 Crear combo</button>
         </div>
       </div>
-      <div class="barra-acciones">
-        <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
-        <select id="filtro-catalogo-tipo">
-          <option value="">Todos los tipos</option>
-          <option value="CONCEPTO_SERVICIO">Servicios</option>
-          <option value="CONCEPTO_REFACCION">Refacciones</option>
-          <option value="CONCEPTO_MANO_OBRA">Mano de obra</option>
-          <option value="COMBO">Combos</option>
-        </select>
-      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…"></div>
       <div class="panel">
         <table class="tabla">
-          <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Estado</th><th></th></tr></thead>
           <tbody id="tabla-catalogo"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
         </table>
       </div>
     </section>
-    <!-- IMPORTACIÓN V8b: plantilla descargable + catalogo_maestro -->
+    <!-- IMPORTACIÓN -->
     <section class="modulo" id="modulo-importacion">
       <div class="encabezado-modulo">
-        <div><h2>Importación masiva de conceptos</h2><p>Descarga la plantilla, captura los conceptos y carga el CSV al catálogo maestro.</p></div>
-        <button class="btn secundario" id="btn-descargar-plantilla">📥 Descargar plantilla CSV</button>
+        <div><h2>Importación masiva de servicios</h2><p>Sube un CSV con columnas: codigo, nombre, descripcion, categoria, unidad_medida, precio_venta, costo_interno, impuesto, estado, observaciones</p></div>
       </div>
       <div class="panel">
-        <p class="hint" style="margin-top:0; margin-bottom:14px;">
-          Columnas requeridas: <strong>tipo, codigo, nombre, categoria_codigo</strong>.<br>
-          Tipos permitidos: CONCEPTO_SERVICIO, CONCEPTO_REFACCION y CONCEPTO_MANO_OBRA.<br>
-          Si el código ya existe, el registro se actualiza. No se administran precios en el catálogo.
-        </p>
-        <input type="file" id="input-importar" accept=".csv,text/csv">
+        <input type="file" id="input-importar" accept=".csv">
         <div id="mensaje-importacion" style="margin-top:10px;"></div>
         <div id="previa-importacion"></div>
       </div>
@@ -250,27 +248,24 @@
     </form>
   </div>
 </div>
-<!-- ======================= MODAL: CONCEPTO V8b ======================= -->
+<!-- ======================= MODAL: SERVICIO ======================= -->
 <div class="modal-fondo" id="modal-servicio">
   <div class="modal">
     <button class="cerrar" data-cerrar-modal="modal-servicio">×</button>
-    <h3 id="titulo-modal-servicio">Nuevo concepto</h3>
+    <h3 id="titulo-modal-servicio">Nuevo servicio</h3>
     <form id="form-servicio">
       <input type="hidden" id="servicio-id">
       <div class="form-grid">
-        <div class="campo"><label>Tipo *</label>
-          <select id="servicio-tipo">
-            <option value="CONCEPTO_SERVICIO">Servicio</option>
-            <option value="CONCEPTO_REFACCION">Refacción</option>
-            <option value="CONCEPTO_MANO_OBRA">Mano de obra</option>
-          </select>
-        </div>
-        <div class="campo"><label>Categoría *</label><select id="servicio-categoria" required></select></div>
-        <div class="campo" style="grid-column:1/-1;"><label>Nombre / descripción *</label><input id="servicio-nombre" required></div>
-        <div class="campo"><label>Código <span style="font-weight:400; color:var(--text-mute);">(opcional, se genera)</span></label><input id="servicio-codigo" placeholder="Ej. MNT-100"></div>
-        <div class="campo"><label>Estado</label><select id="servicio-estado"><option value="true">Activo</option><option value="false">Inactivo</option></select></div>
+        <div class="campo"><label>Código *</label><input id="servicio-codigo" required></div>
+        <div class="campo"><label>Nombre *</label><input id="servicio-nombre" required></div>
+        <div class="campo"><label>Categoría</label><select id="servicio-categoria"></select></div>
+        <div class="campo"><label>Unidad de medida</label><input id="servicio-unidad" value="servicio"></div>
+        <div class="campo"><label>Precio de venta *</label><input type="number" step="0.01" id="servicio-precio" required></div>
+        <div class="campo"><label>Costo interno</label><input type="number" step="0.01" id="servicio-costo"></div>
+        <div class="campo"><label>Impuesto (%)</label><input type="number" step="0.01" id="servicio-impuesto" value="0"></div>
+        <div class="campo"><label>Estado</label><select id="servicio-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
       </div>
-      <p class="hint" style="margin-top:10px;">El catálogo no guarda precios. El precio se captura manualmente en la cotización.</p>
+      <div class="campo" style="margin-top:12px;"><label>Descripción</label><textarea id="servicio-descripcion"></textarea></div>
       <div style="margin-top:16px; text-align:right;">
         <button type="button" class="btn secundario" data-cerrar-modal="modal-servicio">Cancelar</button>
         <button type="submit" class="btn">Guardar</button>
@@ -396,19 +391,20 @@
         <button type="button" class="btn secundario pequeno solo-staff" id="btn-cat-agregar" style="margin-top:8px;">+ Agregar a la cotización</button>
         <small class="hint">Al elegir un combo se insertan todos sus conceptos con precio $0 para que captures el importe. También puedes agregar conceptos manuales abajo.</small>
       </div>
+      <div id="v9-adicionales" class="panel" style="box-shadow:none;border:1px solid var(--border);display:none;margin-top:16px;"><div class="bloque-titulo"><span>Adicionales detectados durante el servicio</span><button class="btn secundario pequeno solo-staff" id="btn-v9-adicional">+ Agregar adicional</button></div><div id="v9-lista-adicionales"></div></div>
       <h3 style="margin-top:18px;">Conceptos</h3>
       <table class="detalle-items" id="tabla-conceptos">
-        <thead><tr><th style="width:120px;">Tipo</th><th>Descripción</th><th style="width:70px;">Cant.</th><th style="width:100px;">Precio</th><th style="width:90px;">Desc.</th><th style="width:100px;">Importe</th><th></th></tr></thead>
+        <thead><tr><th style="width:120px;">Tipo</th><th>Descripción</th><th style="width:70px;">Cant.</th><th style="width:100px;">Precio</th><th style="width:100px;">Importe</th><th></th></tr></thead>
         <tbody id="cuerpo-conceptos"></tbody>
       </table>
       <button type="button" class="btn secundario pequeno solo-staff" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto manual</button>
       <div class="totales-cotizacion">
         Subtotal: $<span id="cotizacion-subtotal">0.00</span><br>
-        Descuento: $<span id="cotizacion-descuento">0.00</span><br>
+        Descuento general: <span id="v9-desc-texto">Sin descuento</span><br><div class="v9-descuento solo-staff"><label><input type="radio" name="v9-desc-tipo" value="ninguno" checked> Sin descuento</label><label><input type="radio" name="v9-desc-tipo" value="porcentaje"> %</label><label><input type="radio" name="v9-desc-tipo" value="monto"> $ fijo</label><input type="number" id="v9-desc-valor" min="0" step="1" value="0" disabled></div>Descuento aplicado: $<span id="cotizacion-descuento">0.00</span><br>
         <strong>Total: $<span id="cotizacion-total">0.00</span></strong>
       </div>
       <div style="margin-top:16px; text-align:right;">
-        <button type="button" class="btn secundario" id="btn-pdf-cotizacion">Descargar PDF</button>
+        <button type="button" class="btn secundario" id="btn-pdf-cotizacion">Descargar PDF</button> <button type="button" class="btn secundario" id="btn-v9-ot" style="display:none;">Generar / abrir OT</button>
         <button type="button" class="btn secundario" data-cerrar-modal="modal-cotizacion">Cerrar</button>
         <button type="button" class="btn solo-staff" id="btn-guardar-cotizacion">Guardar cotización</button>
       </div>
@@ -473,7 +469,7 @@
     </div>
     <div class="form-grid dos" style="margin-top:12px;">
       <div class="campo"><label>Rol *</label>
-        <select id="usuario-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="administrador">Administrador</option></select>
+        <select id="usuario-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="tecnico">Técnico</option><option value="administrador">Administrador / Gerente</option></select>
       </div>
       <div class="campo"><label>Estado</label>
         <select id="usuario-activo"><option value="true">Activo</option><option value="false">Inactivo (acceso bloqueado)</option></select>
@@ -521,7 +517,7 @@
     </div>
     <div class="form-grid dos" style="margin-top:12px;">
       <div class="campo"><label>Rol *</label>
-        <select id="nuevo-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="administrador">Administrador</option></select>
+        <select id="nuevo-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="tecnico">Técnico</option><option value="administrador">Administrador / Gerente</option></select>
       </div>
     </div>
     <div style="margin-top:18px; text-align:right;">
@@ -584,5 +580,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/app.js"></script>
+<div class="modal-fondo" id="modal-v9-orden"><div class="modal" style="max-width:850px"><button class="cerrar" data-cerrar-modal="modal-v9-orden">×</button><h3 id="v9-ot-titulo">Orden de trabajo</h3><div id="v9-ot-resumen"></div><div class="campo" id="v9-ot-asignacion"><label>Técnico</label><select id="v9-ot-tecnico"></select></div><h3 style="margin-top:16px">Trabajos</h3><div id="v9-ot-trabajos"></div><div class="campo"><label>Observaciones</label><textarea id="v9-ot-observaciones"></textarea></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn secundario" id="v9-imprimir-ot">Imprimir</button><button class="btn" id="v9-guardar-ot">Guardar avance</button><button class="btn" id="v9-finalizar-ot">Finalizar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-adicional"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-adicional">×</button><h3>Agregar adicional pendiente</h3><div class="form-grid"><div class="campo"><label>Descripción</label><input id="v9-ad-desc"></div><div class="campo"><label>Cantidad</label><input id="v9-ad-cant" type="number" min="1" step="1" value="1"></div><div class="campo"><label>Precio unitario</label><input id="v9-ad-precio" type="number" min="0" step="1"></div></div><div class="campo"><label>Observación</label><textarea id="v9-ad-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-guardar-adicional">Guardar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-herr"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-herr">×</button><h3>Nueva herramienta</h3><div class="form-grid"><div class="campo"><label>Identificador</label><input id="v9-herr-codigo"></div><div class="campo"><label>Nombre</label><input id="v9-herr-nombre"></div></div><div class="campo"><label>Observaciones</label><textarea id="v9-herr-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-guardar-herr">Guardar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-prestamo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-prestamo">×</button><h3>Préstamo de herramienta</h3><input type="hidden" id="v9-prestamo-id"><div class="campo"><label>Técnico</label><select id="v9-prestamo-tecnico"></select></div><div class="campo"><label>Orden relacionada (opcional)</label><select id="v9-prestamo-ot"></select></div><div class="campo"><label>Observaciones</label><textarea id="v9-prestamo-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-confirmar-prestamo">Prestar</button></div></div></div>
+
+<script src="assets/v9.js"></script>
 </body>
 </html>
