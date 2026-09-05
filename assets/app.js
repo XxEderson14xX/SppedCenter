@@ -1,5 +1,5 @@
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V10
+// Sistema Taller Automotriz · app.js · Versión V10.1
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
 // + V8 (cascada de catálogo maestro en la cotización + creación de combos).
 // ============================================================================
@@ -16,6 +16,7 @@ const seleccion = { clienteId: null, vehiculoId: null };
 // Utilidades
 // ---------------------------------------------------------------------------
 function money(n) { return Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fixFloat(n) { return Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100; }
 function el(id) { return document.getElementById(id); }
 function mostrarMensaje(idc, texto, tipo = "ok") {
   const c = el(idc); if (!c) return;
@@ -27,8 +28,8 @@ async function registrarBitacora(tabla, registroId, accion, anteriores, nuevos) 
     await sb.from("bitacora").insert({ tabla_afectada: tabla, registro_id: registroId, accion, valores_anteriores: anteriores || null, valores_nuevos: nuevos || null, usuario_id: estado.usuario ? estado.usuario.id : null });
   } catch (e) { console.warn("Bitácora:", e); }
 }
-function abrirModal(id) { el(id).classList.add("activo"); }
-function cerrarModal(id) { el(id).classList.remove("activo"); }
+function abrirModal(id) { el(id)?.classList.add("activo"); }
+function cerrarModal(id) { el(id)?.classList.remove("activo"); }
 function puedeEscribir() { return !!(estado.perfil && estado.perfil.rol !== "consulta"); }
 function esAdmin() { return !!(estado.perfil && estado.perfil.rol === "administrador"); }
 
@@ -42,7 +43,7 @@ function badgeServicio(v){ return `<span class="badge azul">${ETIQUETAS_SERVICIO
 // ============================================================================
 // AUTENTICACIÓN
 // ============================================================================
-el("form-login").addEventListener("submit", async (ev) => {
+el("form-login")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   el("login-error").textContent = "";
   let entrada = el("login-correo").value.trim();
@@ -56,7 +57,7 @@ el("form-login").addEventListener("submit", async (ev) => {
   if (error) { el("login-error").textContent = "Usuario o contraseña incorrectos."; return; }
   await iniciarSesionExitosa(data.session);
 });
-el("btn-salir").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+el("btn-salir")?.addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
 
 async function iniciarSesionExitosa(session) {
   estado.usuario = session.user;
@@ -82,7 +83,7 @@ document.querySelectorAll(".nav-item").forEach(item => {
     document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("activo"));
     item.classList.add("activo");
     document.querySelectorAll(".modulo").forEach(m => m.classList.remove("activo"));
-    el("modulo-" + item.dataset.modulo).classList.add("activo");
+    el("modulo-" + item.dataset.modulo)?.classList.add("activo");
     const cargas = { inicio:cargarInicio, cotizaciones:cargarCotizaciones, clientes:cargarClientes, vehiculos:cargarVehiculos, catalogo:cargarCatalogo, bitacora:cargarBitacora, usuarios:cargarUsuarios };
     if (cargas[item.dataset.modulo]) cargas[item.dataset.modulo]();
   });
@@ -97,7 +98,6 @@ async function cargarDatosBase() {
   estado.clientes = clientes || [];
   estado.vehiculos = vehiculos || [];
   estado.catalogoMaestro = errorCatalogo ? [] : (catalogo || []);
-  // Se conservan las propiedades antiguas vacias solo para evitar incompatibilidades con extensiones previas.
   estado.servicios = [];
   estado.categorias = estado.catalogoMaestro.filter(x => x.tipo === "CATEGORIA");
   llenarSelect("cliente", "vehiculo-cliente");
@@ -124,15 +124,17 @@ async function cargarInicio() {
   let pagosPorCot = {};
   if (ids.length) {
     const { data: pagos } = await sb.from("pagos").select("cotizacion_id, importe").in("cotizacion_id", ids).eq("estado", "valido");
-    (pagos || []).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id] || 0) + Number(p.importe); });
+    (pagos || []).forEach(p => { pagosPorCot[p.cotizacion_id] = fixFloat((pagosPorCot[p.cotizacion_id] || 0) + Number(p.importe)); });
   }
   const abiertas = lista.filter(c => !["cerrada","cancelada","rechazada"].includes(c.estado_comercial));
   const pendientes = lista.filter(c => c.estado_comercial === "pendiente_autorizacion");
   const enProceso = lista.filter(c => c.estado_servicio === "en_proceso");
-  const conSaldo = lista.filter(c => Number(c.total||0) - (pagosPorCot[c.id]||0) > 0);
-  const kpis = el("kpis-inicio").querySelectorAll(".valor");
-  kpis[0].textContent = abiertas.length; kpis[1].textContent = pendientes.length; kpis[2].textContent = enProceso.length; kpis[3].textContent = conSaldo.length;
-  el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, Number(c.total||0) - (pagosPorCot[c.id]||0)); return `<tr><td>${c.folio}</td><td>${c.vehiculos?c.vehiculos.placa:"—"}</td><td>${c.clientes?c.clientes.nombre_completo:"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
+  const conSaldo = lista.filter(c => fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0)) > 0);
+  const kpis = el("kpis-inicio")?.querySelectorAll(".valor");
+  if (kpis && kpis.length >= 4) {
+    kpis[0].textContent = abiertas.length; kpis[1].textContent = pendientes.length; kpis[2].textContent = enProceso.length; kpis[3].textContent = conSaldo.length;
+  }
+  el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0))); return `<tr><td>${c.folio}</td><td>${c.vehiculos?c.vehiculos.placa:"—"}</td><td>${c.clientes?c.clientes.nombre_completo:"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
 }
 
 // ============================================================================
@@ -145,8 +147,8 @@ async function cargarClientes(filtro = "") {
   el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${c.nombre_completo}</td><td>${c.telefono||"—"}</td><td>${c.correo||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>${puedeEscribir()?`<button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button>`:""}</td></tr>`).join("") : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.</td></tr>`;
   document.querySelectorAll("[data-editar-cliente]").forEach(b => b.addEventListener("click", () => abrirModalCliente(lista.find(c => c.id === b.dataset.editarCliente))));
 }
-el("buscar-cliente").addEventListener("input", (e) => cargarClientes(e.target.value));
-el("btn-nuevo-cliente").addEventListener("click", () => abrirModalCliente(null));
+el("buscar-cliente")?.addEventListener("input", (e) => cargarClientes(e.target.value));
+el("btn-nuevo-cliente")?.addEventListener("click", () => abrirModalCliente(null));
 function abrirModalCliente(c) {
   el("titulo-modal-cliente").textContent = c ? "Editar cliente" : "Nuevo cliente";
   el("cliente-id").value = c ? c.id : "";
@@ -158,7 +160,7 @@ function abrirModalCliente(c) {
   el("cliente-observaciones").value = c ? c.observaciones || "" : "";
   abrirModal("modal-cliente");
 }
-el("form-cliente").addEventListener("submit", async (ev) => {
+el("form-cliente")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const id = el("cliente-id").value;
   const telNuevo = el("cliente-telefono").value.trim();
@@ -179,7 +181,7 @@ el("form-cliente").addEventListener("submit", async (ev) => {
 });
 
 // ============================================================================
-// VEHÍCULOS + cascada de catálogo de autos
+// VEHÍCULOS
 // ============================================================================
 function normalizarPlaca(p){ return (p||"").toUpperCase().replace(/[\s-]/g,""); }
 async function cargarVehiculos(filtro = "") {
@@ -190,8 +192,8 @@ async function cargarVehiculos(filtro = "") {
   document.querySelectorAll("[data-editar-vehiculo]").forEach(b => b.addEventListener("click", () => abrirModalVehiculo(lista.find(v => v.id === b.dataset.editarVehiculo))));
   document.querySelectorAll("[data-historial]").forEach(b => b.addEventListener("click", () => verHistorialVehiculo(b.dataset.historial)));
 }
-el("buscar-vehiculo").addEventListener("input", (e) => cargarVehiculos(e.target.value));
-el("btn-nuevo-vehiculo").addEventListener("click", () => abrirModalVehiculo(null));
+el("buscar-vehiculo")?.addEventListener("input", (e) => cargarVehiculos(e.target.value));
+el("btn-nuevo-vehiculo")?.addEventListener("click", () => abrirModalVehiculo(null));
 function abrirModalVehiculo(v) {
   el("titulo-modal-vehiculo").textContent = v ? "Editar vehículo" : "Nuevo vehículo";
   el("vehiculo-id").value = v ? v.id : "";
@@ -209,7 +211,7 @@ function abrirModalVehiculo(v) {
   if (el("cat-manual")) el("cat-manual").checked = false;
   abrirModal("modal-vehiculo");
 }
-el("form-vehiculo").addEventListener("submit", async (ev) => {
+el("form-vehiculo")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const id = el("vehiculo-id").value;
   const placaNueva = el("vehiculo-placa").value.trim().toUpperCase();
@@ -237,19 +239,19 @@ async function cargarAniosCatalogo() {
 }
 function sincronizarVehiculoDesdeCatalogo() { el("vehiculo-anio").value = el("cat-anio").value || ""; el("vehiculo-marca").value = el("cat-marca").value || ""; el("vehiculo-modelo").value = el("cat-modelo").value || ""; el("vehiculo-motor").value = el("cat-motor").value || ""; }
 el("cat-anio")?.addEventListener("change", async () => {
-  ["cat-marca","cat-modelo","cat-version","cat-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
+  ["cat-marca","cat-modelo","cat-version","cat-motor"].forEach(i=>{ if(el(i)) el(i).innerHTML=`<option value="">—</option>`; });
   if (!el("cat-anio").value) return;
   const { data } = await sb.rpc("autos_marcas", { p_anio: Number(el("cat-anio").value) });
   el("cat-marca").innerHTML = `<option value="">—</option>` + (data||[]).map(m=>`<option>${m}</option>`).join("");
 });
 el("cat-marca")?.addEventListener("change", async () => {
-  ["cat-modelo","cat-version","cat-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
+  ["cat-modelo","cat-version","cat-motor"].forEach(i=>{ if(el(i)) el(i).innerHTML=`<option value="">—</option>`; });
   if (!el("cat-marca").value) return;
   const { data } = await sb.rpc("autos_modelos", { p_anio: Number(el("cat-anio").value), p_marca: el("cat-marca").value });
   el("cat-modelo").innerHTML = `<option value="">—</option>` + (data||[]).map(m=>`<option>${m}</option>`).join("");
 });
 el("cat-modelo")?.addEventListener("change", async () => {
-  ["cat-version","cat-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
+  ["cat-version","cat-motor"].forEach(i=>{ if(el(i)) el(i).innerHTML=`<option value="">—</option>`; });
   if (!el("cat-modelo").value) return;
   sincronizarVehiculoDesdeCatalogo();
   const base = { p_anio: Number(el("cat-anio").value), p_marca: el("cat-marca").value, p_modelo: el("cat-modelo").value };
@@ -271,14 +273,14 @@ async function verHistorialVehiculo(vehiculoId) {
   let pagosPorCot = {}, seguimientos = [];
   if (ids.length) {
     const [{ data: pagos }, { data: segs }] = await Promise.all([ sb.from("pagos").select("*").in("cotizacion_id", ids).eq("estado","valido"), sb.from("seguimientos").select("*").in("cotizacion_id", ids).order("created_at", { ascending: false }) ]);
-    (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id]||0) + Number(p.importe); });
+    (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = fixFloat((pagosPorCot[p.cotizacion_id]||0) + Number(p.importe)); });
     seguimientos = segs || [];
   }
-  const totalFact = lista.reduce((s,c)=>s+Number(c.total||0),0);
-  const saldoAcum = lista.reduce((s,c)=>s+Math.max(0,Number(c.total||0)-(pagosPorCot[c.id]||0)),0);
-  const k = el("kpis-historial").querySelectorAll(".valor");
-  k[0].textContent = lista.length; k[1].textContent = "$"+money(totalFact); k[2].textContent = "$"+money(saldoAcum);
-  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => { const saldo = Math.max(0, Number(c.total||0)-(pagosPorCot[c.id]||0)); return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`; }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
+  const totalFact = lista.reduce((s,c)=>fixFloat(s+Number(c.total||0)),0);
+  const saldoAcum = lista.reduce((s,c)=>fixFloat(s+Math.max(0,Number(c.total||0)-(pagosPorCot[c.id]||0))),0);
+  const k = el("kpis-historial")?.querySelectorAll(".valor");
+  if (k && k.length >= 3) { k[0].textContent = lista.length; k[1].textContent = "$"+money(totalFact); k[2].textContent = "$"+money(saldoAcum); }
+  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0)-(pagosPorCot[c.id]||0))); return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`; }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
   const { data: placas } = await sb.from("placas_historial").select("*").eq("vehiculo_id", vehiculoId).order("desde", { ascending: false });
   el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${p.placa}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
@@ -332,11 +334,11 @@ function llenarFiltrosCatalogo() {
   sel.innerHTML = `<option value="">Categoría: todas</option>` + cats.map(c => `<option value="${c.codigo}">${c.nombre}</option>`).join("");
   sel.value = actual;
 }
-el("buscar-servicio").addEventListener("input", e => cargarCatalogo(e.target.value));
+el("buscar-servicio")?.addEventListener("input", e => cargarCatalogo(e.target.value));
 el("filtro-catalogo-tipo")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
 el("filtro-catalogo-categoria")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
 el("filtro-catalogo-estado")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
-el("btn-nuevo-servicio").addEventListener("click", () => abrirModalServicio(null));
+el("btn-nuevo-servicio")?.addEventListener("click", () => abrirModalServicio(null));
 function abrirModalServicio(s) {
   el("titulo-modal-servicio").textContent = s ? "Editar concepto" : "Nuevo concepto";
   el("servicio-id").value = s ? s.codigo : "";
@@ -349,7 +351,7 @@ function abrirModalServicio(s) {
   el("servicio-descripcion").value = s ? (s.nombre || "") : "";
   abrirModal("modal-servicio");
 }
-el("form-servicio").addEventListener("submit", async ev => {
+el("form-servicio")?.addEventListener("submit", async ev => {
   ev.preventDefault();
   if (!esAdmin()) { mostrarMensaje("mensaje-servicio", "Solo un administrador puede modificar el catálogo.", "error"); return; }
   const codigoOriginal = el("servicio-id").value || null;
@@ -368,16 +370,17 @@ el("form-servicio").addEventListener("submit", async ev => {
   await cargarDatosBase();
   cargarCatalogo();
 });
+
 // ============================================================================
-// COTIZACIONES (lista + filtros)
+// COTIZACIONES
 // ============================================================================
 async function cargarCotizaciones() {
   const { data } = await sb.from("cotizaciones").select("*, clientes(nombre_completo), vehiculos(placa, marca, modelo)").order("created_at", { ascending: false });
   const cots = data || [];
   const ids = cots.map(c => c.id);
   let pagosPorCot = {};
-  if (ids.length) { const { data: pagos } = await sb.from("pagos").select("cotizacion_id, importe").in("cotizacion_id", ids).eq("estado", "valido"); (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = (pagosPorCot[p.cotizacion_id]||0) + Number(p.importe); }); }
-  cots.forEach(c => { c._saldo = Math.max(0, Number(c.total||0) - (pagosPorCot[c.id]||0)); });
+  if (ids.length) { const { data: pagos } = await sb.from("pagos").select("cotizacion_id, importe").in("cotizacion_id", ids).eq("estado", "valido"); (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = fixFloat((pagosPorCot[p.cotizacion_id]||0) + Number(p.importe)); }); }
+  cots.forEach(c => { c._saldo = Math.max(0, fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0))); });
   aplicarFiltrosCotizaciones(cots);
 }
 function aplicarFiltrosCotizaciones(listaCompleta) {
@@ -393,20 +396,18 @@ function aplicarFiltrosCotizaciones(listaCompleta) {
   document.querySelectorAll("[data-abrir-cotizacion]").forEach(b => b.addEventListener("click", () => abrirCotizacion(b.dataset.abrirCotizacion)));
   window.__cotizacionesCache = listaCompleta;
 }
-el("buscar-cotizacion").addEventListener("input", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
-el("filtro-estado-comercial").addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
+el("buscar-cotizacion")?.addEventListener("input", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
+el("filtro-estado-comercial")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 el("filtro-estado-pago")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 
-// Pestañas del modal (recalcula gate)
 document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", () => {
   document.querySelectorAll(".pestana").forEach(x => x.classList.remove("activa"));
   p.classList.add("activa");
   ["datos","pagos","seguimiento","archivos"].forEach(n => el("pestana-"+n).style.display = n === p.dataset.pestana ? "block" : "none");
   actualizarGatePagos();
 }));
-el("btn-nueva-cotizacion").addEventListener("click", () => abrirCotizacion(null));
+el("btn-nueva-cotizacion")?.addEventListener("click", () => abrirCotizacion(null));
 
-// GATE: Pagos/Seguimiento/Archivos requieren cotización guardada
 function actualizarGatePagos() {
   const hay = !!(el("cotizacion-id") && el("cotizacion-id").value);
   const secciones = [
@@ -423,7 +424,7 @@ function actualizarGatePagos() {
 }
 
 // ============================================================================
-// V6 · CLIENTE Y VEHÍCULO INLINE
+// CLIENTE Y VEHÍCULO INLINE
 // ============================================================================
 document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.addEventListener("change", () => {
   const nuevo = document.querySelector('input[name="modo-cliente"]:checked').value === "nuevo";
@@ -432,7 +433,7 @@ document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.addEventL
   if (nuevo) { seleccion.clienteId = null; refrescarAutosDelCliente(); }
 }));
 let _debCliente;
-el("cliente-buscar").addEventListener("input", () => {
+el("cliente-buscar")?.addEventListener("input", () => {
   clearTimeout(_debCliente);
   const texto = el("cliente-buscar").value.trim();
   const cont = el("cliente-sugerencias");
@@ -453,7 +454,7 @@ el("cliente-buscar").addEventListener("input", () => {
   }, 250);
 });
 let _debTel;
-el("ncli-telefono").addEventListener("input", () => {
+el("ncli-telefono")?.addEventListener("input", () => {
   clearTimeout(_debTel);
   const tel = el("ncli-telefono").value.trim();
   const alerta = el("ncli-tel-alerta");
@@ -473,7 +474,7 @@ async function refrescarAutosDelCliente() {
   const autos = data || [];
   sel.innerHTML = autos.length ? `<option value="">Selecciona un auto…</option>` + autos.map(v => `<option value="${v.id}">${v.placa} · ${v.marca} ${v.modelo} ${v.anio||""}${v.vin?" · VIN "+v.vin.slice(-6):""}</option>`).join("") : `<option value="">Este cliente no tiene autos — usa "Auto nuevo"</option>`;
 }
-el("vehiculo-existente-select").addEventListener("change", () => { seleccion.vehiculoId = el("vehiculo-existente-select").value || null; });
+el("vehiculo-existente-select")?.addEventListener("change", () => { seleccion.vehiculoId = el("vehiculo-existente-select").value || null; });
 document.querySelectorAll('input[name="modo-vehiculo"]').forEach(r => r.addEventListener("change", () => {
   const nuevo = document.querySelector('input[name="modo-vehiculo"]:checked').value === "nuevo";
   el("vehiculo-modo-nuevo").style.display = nuevo ? "block" : "none";
@@ -481,19 +482,19 @@ document.querySelectorAll('input[name="modo-vehiculo"]').forEach(r => r.addEvent
   if (nuevo) { seleccion.vehiculoId = null; cargarAniosCotizacion(); }
 }));
 async function cargarAniosCotizacion() { const { data } = await sb.rpc("autos_anios"); el("nveh-anio").innerHTML = `<option value="">—</option>` + (data||[]).map(a=>`<option>${a}</option>`).join(""); }
-el("nveh-anio").addEventListener("change", async () => {
+el("nveh-anio")?.addEventListener("change", async () => {
   ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
   if (!el("nveh-anio").value) return;
   const { data } = await sb.rpc("autos_marcas", { p_anio: Number(el("nveh-anio").value) });
   el("nveh-marca").innerHTML = `<option value="">—</option>` + (data||[]).map(m=>`<option>${m}</option>`).join("");
 });
-el("nveh-marca").addEventListener("change", async () => {
+el("nveh-marca")?.addEventListener("change", async () => {
   ["nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
   if (!el("nveh-marca").value) return;
   const { data } = await sb.rpc("autos_modelos", { p_anio: Number(el("nveh-anio").value), p_marca: el("nveh-marca").value });
   el("nveh-modelo").innerHTML = `<option value="">—</option>` + (data||[]).map(m=>`<option>${m}</option>`).join("");
 });
-el("nveh-modelo").addEventListener("change", async () => {
+el("nveh-modelo")?.addEventListener("change", async () => {
   ["nveh-version","nveh-motor"].forEach(i=>el(i).innerHTML=`<option value="">—</option>`);
   if (!el("nveh-modelo").value) return;
   const base = { p_anio: Number(el("nveh-anio").value), p_marca: el("nveh-marca").value, p_modelo: el("nveh-modelo").value };
@@ -502,9 +503,9 @@ el("nveh-modelo").addEventListener("change", async () => {
   const { data: mot } = await sb.rpc("autos_motores", { ...base, p_version: "" });
   el("nveh-motor").innerHTML = `<option value="">—</option>` + (mot||[]).map(m=>`<option>${m}</option>`).join("");
 });
-el("nveh-manual").addEventListener("change", () => { const on = el("nveh-manual").checked; el("nveh-marca-manual").disabled = !on; el("nveh-modelo-manual").disabled = !on; ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).disabled = on); });
+el("nveh-manual")?.addEventListener("change", () => { const on = el("nveh-manual").checked; el("nveh-marca-manual").disabled = !on; el("nveh-modelo-manual").disabled = !on; ["nveh-marca","nveh-modelo","nveh-version","nveh-motor"].forEach(i=>el(i).disabled = on); });
 let _debVin;
-el("nveh-vin").addEventListener("input", () => {
+el("nveh-vin")?.addEventListener("input", () => {
   clearTimeout(_debVin);
   const vin = el("nveh-vin").value.trim();
   const alerta = el("nveh-vin-alerta");
@@ -519,19 +520,21 @@ el("nveh-vin").addEventListener("input", () => {
 });
 function resetInlineCotizacion() {
   seleccion.clienteId = null; seleccion.vehiculoId = null;
-  document.querySelector('input[name="modo-cliente"][value="existente"]').checked = true;
-  document.querySelector('input[name="modo-vehiculo"][value="existente"]').checked = true;
+  const modoCliOpt = document.querySelector('input[name="modo-cliente"][value="existente"]');
+  const modoVehOpt = document.querySelector('input[name="modo-vehiculo"][value="existente"]');
+  if (modoCliOpt) modoCliOpt.checked = true;
+  if (modoVehOpt) modoVehOpt.checked = true;
   el("cliente-modo-nuevo").style.display = "none"; el("cliente-modo-existente").style.display = "block";
   el("vehiculo-modo-nuevo").style.display = "none"; el("vehiculo-modo-existente").style.display = "block";
   el("cliente-buscar").value = ""; el("cliente-elegido").style.display = "none"; el("cliente-sugerencias").classList.remove("activo");
-  ["ncli-nombre","ncli-telefono","ncli-correo","ncli-rfc","ncli-direccion","ncli-obs","nveh-vin","nveh-placa","nveh-color","nveh-km","nveh-marca-manual","nveh-modelo-manual"].forEach(i=>el(i).value="");
+  ["ncli-nombre","ncli-telefono","ncli-correo","ncli-rfc","ncli-direccion","ncli-obs","nveh-vin","nveh-placa","nveh-color","nveh-km","nveh-marca-manual","nveh-modelo-manual"].forEach(i=>{ if(el(i)) el(i).value=""; });
   el("ncli-tel-alerta").textContent = ""; el("nveh-vin-alerta").textContent = "";
   el("vehiculo-existente-select").innerHTML = `<option value="">Primero elige un cliente…</option>`;
   if (el("nveh-manual")) el("nveh-manual").checked = false;
 }
 
 // ============================================================================
-// V8 · CASCADA DEL CATÁLOGO MAESTRO EN LA COTIZACIÓN
+// CASCADA DEL CATÁLOGO MAESTRO EN LA COTIZACIÓN
 // ============================================================================
 function tipoCatalogoARenglon(tipoCat) {
   if (tipoCat === "CONCEPTO_MANO_OBRA") return "mano_obra";
@@ -562,8 +565,8 @@ el("btn-cat-agregar")?.addEventListener("click", async () => {
     const codigo = val.split("::")[1];
     const { data } = await sb.rpc("expandir_combo", { p_combo_codigo: codigo });
     if (!data || !data.length) { mostrarMensaje("mensaje-cotizacion", "Ese combo no tiene conceptos.", "error"); return; }
-    data.forEach(item => estado.conceptosEnEdicion.push({ tipo: tipoCatalogoARenglon(item.tipo), descripcion: item.nombre, cantidad: item.cantidad || 1, precio_unitario: 0, descuento: 0, importe: 0 }));
-    mostrarMensaje("mensaje-cotizacion", `Combo agregado: ${data.length} concepto(s). Captura los precios.`);
+    data.forEach(item => estado.conceptosEnEdicion.push({ tipo: tipoCatalogoARenglon(item.tipo), descripcion: item.nombre, cantidad: item.cantidad || 1, precio_unitario: item.precio_unitario || 0, descuento: 0, importe: fixFloat((item.cantidad || 1) * (item.precio_unitario || 0)) }));
+    mostrarMensaje("mensaje-cotizacion", `Combo agregado: ${data.length} concepto(s).`);
   } else if (val.startsWith("CONCEPTO::")) {
     const [, , tipoCat, nombre] = val.split("::");
     estado.conceptosEnEdicion.push({ tipo: tipoCatalogoARenglon(tipoCat), descripcion: nombre, cantidad: 1, precio_unitario: 0, descuento: 0, importe: 0 });
@@ -579,7 +582,7 @@ async function abrirCotizacion(id) {
   estado.cotizacionActualId = id;
   el("titulo-modal-cotizacion").textContent = id ? "Cotización" : "Nueva cotización";
   el("cotizacion-id").value = id || "";
-  document.querySelector('.pestana[data-pestana="datos"]').click();
+  document.querySelector('.pestana[data-pestana="datos"]')?.click();
   el("cotizacion-entrega").value = ""; el("cotizacion-km").value = ""; el("cotizacion-observaciones").value = "";
   el("cotizacion-estado-comercial").value = "borrador"; el("cotizacion-estado-comercial").disabled = false;
   el("cotizacion-estado-servicio").value = "sin_iniciar";
@@ -616,50 +619,65 @@ async function abrirCotizacion(id) {
     await cargarSeguimientoCotizacion(id);
   }
   renderConceptos();
-  cargarCategoriasCotizacion();   // V8 · llena el selector de categorías
+  cargarCategoriasCotizacion();
   actualizarGatePagos();
   abrirModal("modal-cotizacion");
 }
+
 function renderConceptos() {
   el("cuerpo-conceptos").innerHTML = estado.conceptosEnEdicion.map((cpt, i) => `
     <tr>
       <td><select data-campo="tipo" data-i="${i}">${[["servicio","Servicio"],["mano_obra","Mano de obra"],["consumible","Consumible"],["refaccion_libre","Refacción"],["descuento","Descuento"],["nota","Nota"]].map(([v,txt])=>`<option value="${v}" ${cpt.tipo===v?"selected":""}>${txt}</option>`).join("")}</select></td>
       <td><input data-campo="descripcion" data-i="${i}" value="${cpt.descripcion||""}"></td>
       <td><input type="number" step="1" min="1" data-campo="cantidad" data-i="${i}" value="${cpt.cantidad||1}"></td>
-      <td><input type="number" step="1" min="0" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
-      <td><input type="number" step="1" min="0" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
+      <td><input type="number" step="0.01" min="0" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
+      <td><input type="number" step="0.01" min="0" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
       <td data-importe-i="${i}">$${money(cpt.importe||0)}</td>
       <td><button type="button" class="btn secundario pequeno" data-quitar="${i}">×</button></td>
     </tr>`).join("");
-  el("cuerpo-conceptos").querySelectorAll("[data-campo]").forEach(input => input.addEventListener("input", () => {
-    const i = Number(input.dataset.i), campo = input.dataset.campo;
-    if (campo === "cantidad") estado.conceptosEnEdicion[i][campo] = Math.max(1, Math.floor(Number(input.value||1)));
-    else if (["precio_unitario","descuento"].includes(campo)) estado.conceptosEnEdicion[i][campo] = Math.max(0, Math.floor(Number(input.value||0)));
-    else estado.conceptosEnEdicion[i][campo] = input.value;
-    recalcularConcepto(i);
-  }));
-  el("cuerpo-conceptos").querySelectorAll("[data-quitar]").forEach(b => b.addEventListener("click", () => { estado.conceptosEnEdicion.splice(Number(b.dataset.quitar),1); renderConceptos(); recalcularTotales(); }));
   recalcularTotales();
 }
+
+// Delegación de eventos para evitar memory leaks
+el("cuerpo-conceptos")?.addEventListener("input", (e) => {
+  const input = e.target;
+  if (!input.dataset.campo) return;
+  const i = Number(input.dataset.i), campo = input.dataset.campo;
+  if (campo === "cantidad") estado.conceptosEnEdicion[i][campo] = Math.max(1, Math.floor(Number(input.value||1)));
+  else if (["precio_unitario","descuento"].includes(campo)) estado.conceptosEnEdicion[i][campo] = Math.max(0, fixFloat(input.value||0));
+  else estado.conceptosEnEdicion[i][campo] = input.value;
+  recalcularConcepto(i);
+});
+
+el("cuerpo-conceptos")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-quitar]");
+  if (!b) return;
+  estado.conceptosEnEdicion.splice(Number(b.dataset.quitar), 1);
+  renderConceptos();
+});
+
 function recalcularConcepto(i) {
   const c = estado.conceptosEnEdicion[i];
-  c.importe = Math.max(0, (c.cantidad||0)*(c.precio_unitario||0) - (c.descuento||0));
+  c.importe = Math.max(0, fixFloat((c.cantidad||0)*(c.precio_unitario||0) - (c.descuento||0)));
   const celda = document.querySelector(`[data-importe-i="${i}"]`);
   if (celda) celda.textContent = "$" + money(c.importe);
   recalcularTotales();
 }
+
 function recalcularTotales() {
-  const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.cantidad||0)*(c.precio_unitario||0),0);
-  const descuento = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.descuento||0),0);
+  const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
+  const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
+  const total = Math.max(0, fixFloat(subtotal - descuento));
   el("cotizacion-subtotal").textContent = money(subtotal);
   el("cotizacion-descuento").textContent = money(descuento);
-  el("cotizacion-total").textContent = money(Math.max(0, subtotal - descuento));
+  el("cotizacion-total").textContent = money(total);
 }
-el("btn-agregar-concepto").addEventListener("click", () => { estado.conceptosEnEdicion.push({ tipo:"servicio", descripcion:"", cantidad:1, precio_unitario:0, descuento:0, importe:0 }); renderConceptos(); });
+el("btn-agregar-concepto")?.addEventListener("click", () => { estado.conceptosEnEdicion.push({ tipo:"servicio", descripcion:"", cantidad:1, precio_unitario:0, descuento:0, importe:0 }); renderConceptos(); });
 
 function actualizarVisibilidadPanelCierre() { el("panel-cierre").style.display = el("cotizacion-estado-comercial").value === "cerrada" ? "block" : "none"; }
-el("cotizacion-estado-comercial").addEventListener("change", actualizarVisibilidadPanelCierre);
-el("cotizacion-cerrar-adeudo").addEventListener("change", () => { el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none"; });
+el("cotizacion-estado-comercial")?.addEventListener("change", actualizarVisibilidadPanelCierre);
+el("cotizacion-cerrar-adeudo")?.addEventListener("change", () => { el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none"; });
+
 function validarReglasDeCierre(saldoActual) {
   if (el("cotizacion-estado-comercial").value !== "cerrada") return null;
   if (el("cotizacion-estado-servicio").value !== "vehiculo_entregado") return "No se puede cerrar: el estado de servicio debe ser 'Vehículo entregado'.";
@@ -669,7 +687,8 @@ function validarReglasDeCierre(saldoActual) {
   else { if (!esAdmin()) return "Cerrar con adeudo requiere autorización de un administrador."; if (!el("cotizacion-motivo-adeudo").value.trim()) return "Cerrar con adeudo requiere un motivo."; if (!el("cotizacion-fecha-compromiso").value) return "Cerrar con adeudo requiere fecha compromiso."; }
   return null;
 }
-el("btn-guardar-cotizacion").addEventListener("click", async () => {
+
+el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   const modoCli = document.querySelector('input[name="modo-cliente"]:checked').value;
   const modoVeh = document.querySelector('input[name="modo-vehiculo"]:checked').value;
   if (modoCli === "existente" && !seleccion.clienteId) { mostrarMensaje("mensaje-cotizacion", "Selecciona o crea un cliente.", "error"); return; }
@@ -690,12 +709,12 @@ el("btn-guardar-cotizacion").addEventListener("click", async () => {
   const vehiculoId = resuelto[0].vehiculo_id;
   if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
 
-  const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.cantidad||0)*(c.precio_unitario||0),0);
-  const descuento = estado.conceptosEnEdicion.reduce((s,c)=>s+(c.descuento||0),0);
-  const total = Math.max(0, subtotal - descuento);
+  const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
+  const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
+  const total = Math.max(0, fixFloat(subtotal - descuento));
   let saldoActual = total;
   const idExistente = el("cotizacion-id").value;
-  if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, total - (pv||[]).reduce((s,p)=>s+Number(p.importe),0)); }
+  if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
   const errCierre = validarReglasDeCierre(saldoActual);
   if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
 
@@ -727,15 +746,15 @@ async function cargarPagosCotizacion(cotizacionId) {
   const { data: pagos } = await sb.from("pagos").select("*").eq("cotizacion_id", cotizacionId).order("fecha");
   const { data: cot } = await sb.from("cotizaciones").select("total").eq("id", cotizacionId).single();
   const validos = (pagos||[]).filter(p => p.estado === "valido");
-  const saldo = (cot ? cot.total : 0) - validos.reduce((s,p)=>s+Number(p.importe),0);
+  const saldo = fixFloat((cot ? cot.total : 0) - validos.reduce((s,p)=>fixFloat(s + Number(p.importe)),0));
   el("cotizacion-saldo").textContent = money(saldo);
   el("tabla-pagos-cotizacion").innerHTML = (pagos||[]).map(p => `<tr><td>${p.fecha}</td><td>$${money(p.importe)}</td><td>${p.metodo}</td><td>${p.referencia||"—"}</td><td>${p.estado}</td><td>${p.estado==='valido'&&esAdmin()?`<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>`:""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin pagos registrados.</td></tr>`;
   document.querySelectorAll("[data-reversar]").forEach(b => b.addEventListener("click", async () => { const motivo = prompt("Motivo de la reversión (obligatorio):"); if (!motivo) return; await sb.from("pagos").update({ estado:"reversado" }).eq("id", b.dataset.reversar); await registrarBitacora("pagos", b.dataset.reversar, "reversar", null, { motivo }); cargarPagosCotizacion(cotizacionId); }));
 }
-el("btn-agregar-pago").addEventListener("click", async () => {
+el("btn-agregar-pago")?.addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de registrar pagos.", "error"); return; }
-  const importe = Number(el("pago-importe").value || 0); if (importe <= 0) return;
+  const importe = fixFloat(el("pago-importe").value || 0); if (importe <= 0) return;
   const registro = { cotizacion_id: id, importe, metodo: el("pago-metodo").value, referencia: el("pago-referencia").value.trim()||null, comentario: el("pago-comentario").value.trim()||null, usuario_id: estado.usuario.id };
   const { data, error } = await sb.from("pagos").insert(registro).select().single();
   if (error) { alert("Error al registrar pago: " + error.message); return; }
@@ -749,7 +768,7 @@ async function cargarSeguimientoCotizacion(cotizacionId) {
   const { data } = await sb.from("seguimientos").select("*").eq("cotizacion_id", cotizacionId).order("created_at", { ascending: false });
   el("lista-seguimiento").innerHTML = (data||[]).map(s => `<li>${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`).join("") || `<li>Sin movimientos registrados.</li>`;
 }
-el("btn-agregar-seguimiento").addEventListener("click", async () => {
+el("btn-agregar-seguimiento")?.addEventListener("click", async () => {
   const id = el("cotizacion-id").value; const texto = el("seguimiento-texto").value.trim();
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de agregar seguimiento.", "error"); return; }
   if (!texto) return;
@@ -761,7 +780,7 @@ el("btn-agregar-seguimiento").addEventListener("click", async () => {
 // IMPORTACIÓN MASIVA DEL CATÁLOGO MAESTRO V10 (CSV)
 // ============================================================================
 let _registrosImportacion = [];
-el("input-importar").addEventListener("change", async ev => {
+el("input-importar")?.addEventListener("change", async ev => {
   const archivo = ev.target.files[0]; if (!archivo) return;
   const filas = parseCSV(await archivo.text());
   if (!filas.length) { mostrarMensaje("mensaje-importacion", "El archivo está vacío.", "error"); return; }
@@ -775,7 +794,7 @@ el("input-importar").addEventListener("change", async ev => {
   _registrosImportacion.forEach(r => previa += `<tr><td>${r.codigo}</td><td>${r.nombre}</td><td>${r.tipo}</td><td>${r.categoria}</td><td>${existentes.has(r.codigo)?"Actualiza":"Nuevo"}</td></tr>`);
   previa += `</tbody></table><button class="btn" id="btn-confirmar-importacion" style="margin-top:10px;">Aplicar ${_registrosImportacion.length} registro(s)</button>`;
   el("previa-importacion").innerHTML = previa;
-  el("btn-confirmar-importacion").addEventListener("click", aplicarImportacion);
+  el("btn-confirmar-importacion")?.addEventListener("click", aplicarImportacion);
 });
 async function aplicarImportacion() {
   if (!esAdmin()) { mostrarMensaje("mensaje-importacion", "Solo un administrador puede aplicar importaciones.", "error"); return; }
@@ -802,6 +821,7 @@ async function aplicarImportacion() {
   await cargarDatosBase();
 }
 function parseCSV(texto) { return texto.trim().split(/\r?\n/).map(l => l.split(",").map(c => c.trim())); }
+
 // ============================================================================
 // ARCHIVOS ADJUNTOS
 // ============================================================================
@@ -810,7 +830,7 @@ async function cargarArchivosCotizacion(cotizacionId) {
   const lista = data || [];
   el("galeria-archivos").innerHTML = lista.length ? lista.map(a => { const url = sb.storage.from("evidencias").getPublicUrl(a.storage_path).data.publicUrl; const esImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(a.nombre_archivo); return `<a href="${url}" target="_blank" class="archivo-item">${esImg?`<img src="${url}" alt="${a.nombre_archivo}">`:`<div class="archivo-generico">Archivo</div>`}<small>${a.tipo||"otro"}</small><small>${a.nombre_archivo}</small></a>`; }).join("") : `<div class="vacio-tabla">Sin archivos todavía.</div>`;
 }
-el("btn-subir-archivo").addEventListener("click", async () => {
+el("btn-subir-archivo")?.addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
   if (!id) { mostrarMensaje("mensaje-archivo", "Guarda la cotización antes de subir archivos.", "error"); return; }
   const archivo = el("archivo-input").files[0];
@@ -829,7 +849,7 @@ el("btn-subir-archivo").addEventListener("click", async () => {
 // ============================================================================
 // PDF DE COTIZACIÓN
 // ============================================================================
-el("btn-pdf-cotizacion").addEventListener("click", async () => {
+el("btn-pdf-cotizacion")?.addEventListener("click", async () => {
   const id = el("cotizacion-id").value;
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de generar el PDF.", "error"); return; }
   await generarPDFCotizacion(id);
@@ -839,8 +859,8 @@ async function generarPDFCotizacion(cotizacionId) {
   if (!c) { alert("No se encontró la cotización."); return; }
   const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
   const { data: pagos } = await sb.from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado","valido");
-  const pagado = (pagos||[]).reduce((s,p)=>s+Number(p.importe),0);
-  const saldo = Math.max(0, Number(c.total||0) - pagado);
+  const pagado = (pagos||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0);
+  const saldo = Math.max(0, fixFloat(Number(c.total||0) - pagado));
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
   const navy=[15,42,74], teal=[27,111,122], gris=[90,100,110];
@@ -878,7 +898,7 @@ async function generarPDFCotizacion(cotizacionId) {
 }
 
 // ============================================================================
-// USUARIOS (V3 + V4 + V7)
+// USUARIOS
 // ============================================================================
 let _listaUsuarios = [];
 async function cargarUsuarios(filtro = "") {
@@ -895,8 +915,8 @@ function renderTablaUsuarios(filtro = "") {
   el("tabla-usuarios").innerHTML = lista.length ? lista.map(u => `<tr><td>${u.username?"@"+u.username:"⚠ Sin usuario"}</td><td>${u.nombre_completo||"—"}</td><td>${u.correo||"—"}</td><td>${ROLES[u.rol]||u.rol}</td><td>${u.activo?"Activo":"Inactivo"}</td><td><button class="btn secundario pequeno" data-editar-usuario="${u.id}">Editar perfil</button></td></tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">No hay usuarios. Crea uno con "Crear usuario".</td></tr>`;
   document.querySelectorAll("[data-editar-usuario]").forEach(b => b.addEventListener("click", () => abrirModalUsuario(_listaUsuarios.find(x => x.id === b.dataset.editarUsuario))));
 }
-el("buscar-usuario").addEventListener("input", e => renderTablaUsuarios(e.target.value));
-el("btn-refrescar-usuarios").addEventListener("click", () => cargarUsuarios(el("buscar-usuario").value));
+el("buscar-usuario")?.addEventListener("input", e => renderTablaUsuarios(e.target.value));
+el("btn-refrescar-usuarios")?.addEventListener("click", () => cargarUsuarios(el("buscar-usuario").value));
 function abrirModalUsuario(u) {
   el("titulo-modal-usuario").textContent = u && u.nombre_completo ? `Perfil de ${u.nombre_completo}` : "Configurar perfil";
   el("usuario-id").value = u ? u.id : "";
@@ -909,7 +929,7 @@ function abrirModalUsuario(u) {
   el("usuario-password").value = "";
   abrirModal("modal-usuario");
 }
-el("btn-generar-username").addEventListener("click", async () => {
+el("btn-generar-username")?.addEventListener("click", async () => {
   const nombre = el("usuario-nombre").value.trim();
   if (!nombre) { el("username-disponibilidad").textContent = "Escribe primero el nombre."; return; }
   const u = await generarUsernameDesde(nombre);
@@ -917,7 +937,7 @@ el("btn-generar-username").addEventListener("click", async () => {
   el("usuario-username").value = u;
   el("username-disponibilidad").innerHTML = `<span style="color:var(--green);">✓ Disponible: @${u}</span>`;
 });
-el("usuario-username").addEventListener("input", async () => {
+el("usuario-username")?.addEventListener("input", async () => {
   const val = el("usuario-username").value.trim().toLowerCase();
   if (!val) { el("username-disponibilidad").textContent = ""; return; }
   if (val.length < 3) { el("username-disponibilidad").innerHTML = "Mínimo 3 caracteres."; return; }
@@ -926,7 +946,7 @@ el("usuario-username").addEventListener("input", async () => {
   const { data: disp } = await sb.rpc("username_disponible", { p_username: val });
   el("username-disponibilidad").innerHTML = disp ? `<span style="color:var(--green);">✓ Disponible</span>` : `<span style="color:var(--red);">✗ Ya está en uso.</span>`;
 });
-el("btn-guardar-usuario").addEventListener("click", async () => {
+el("btn-guardar-usuario")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
   const username = el("usuario-username").value.trim().toLowerCase();
   const nombre = el("usuario-nombre").value.trim();
@@ -941,7 +961,6 @@ el("btn-guardar-usuario").addEventListener("click", async () => {
   mostrarMensaje("mensaje-usuario", "Perfil guardado correctamente.");
   cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
 });
-// V7 · Restablecer contraseña
 el("btn-reset-password")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
   const password = el("usuario-password").value;
@@ -955,7 +974,6 @@ el("btn-reset-password")?.addEventListener("click", async () => {
   el("usuario-password").value = "";
   mostrarMensaje("mensaje-usuario", "Contraseña actualizada correctamente.");
 });
-// V7 · Eliminar usuario
 el("btn-eliminar-usuario")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
   const nombre = el("usuario-nombre").value || "este usuario";
@@ -980,7 +998,7 @@ async function generarUsernameDesde(nombreCompleto) {
 }
 el("btn-nuevo-usuario")?.addEventListener("click", () => {
   if (!esAdmin()) { alert("Solo un administrador puede crear usuarios."); return; }
-  ["nuevo-nombre","nuevo-username","nuevo-correo","nuevo-password"].forEach(i=>el(i).value="");
+  ["nuevo-nombre","nuevo-username","nuevo-correo","nuevo-password"].forEach(i=>{ if(el(i)) el(i).value=""; });
   el("nuevo-rol").value = "consulta"; el("nuevo-username-estado").textContent = "";
   abrirModal("modal-crear-usuario");
 });
@@ -1030,7 +1048,7 @@ async function cargarBitacora() {
 }
 
 // ============================================================================
-// V8 · CREACIÓN DE COMBOS (panel en el módulo Catálogo)
+// CREACIÓN DE COMBOS
 // ============================================================================
 let _comboItems = [];
 el("btn-nuevo-combo")?.addEventListener("click", async () => {
