@@ -1,7 +1,7 @@
 // ============================================================================
 // Sistema Taller Automotriz · assets/v9.js · Integración V11.1
-// Base: v9.js completo. Conserva Dashboard, descuentos, adicionales, OT,
-// carga, ingresos y bitácora; corrige Herramienta especial (genera codigo).
+// Dashboard, descuentos, adicionales, OT, carga, ingresos, bitácora
+// + Herramienta especial (identificador automático visible + historial real)
 // ============================================================================
 (() => {
 const $ = id => document.getElementById(id);
@@ -181,7 +181,9 @@ $('buscar-herramienta')?.addEventListener('input',renderHerr);
 $('filtro-herramienta')?.addEventListener('change',renderHerr);
 
 function limpiarFormularioHerramienta(){
-  [['v11-herr-id',''],['v9-herr-codigo',''],['v9-herr-nombre',''],['v11-herr-serie',''],['v11-herr-marca',''],['v11-herr-modelo',''],['v11-herr-ubicacion',''],['v9-herr-obs','']].forEach(([id,v])=>{if($(id))$(id).value=v;});
+  [['v11-herr-id',''],['v9-herr-nombre',''],['v11-herr-serie',''],['v11-herr-marca',''],['v11-herr-modelo',''],['v11-herr-ubicacion',''],['v9-herr-obs','']].forEach(([id,v])=>{if($(id))$(id).value=v;});
+  // Identificador automático: se genera y se muestra ANTES de guardar.
+  if($('v9-herr-codigo')){ $('v9-herr-codigo').value = generarCodigoHerramientaV11(); }
   if($('v11-herr-titulo'))$('v11-herr-titulo').textContent='Nueva herramienta';
   limpiarMensajeV11('v11-herr-mensaje');
 }
@@ -202,7 +204,7 @@ function abrirHerramientaEditar(id){
 }
 $('btn-nueva-herramienta')?.addEventListener('click',abrirHerramientaNueva);
 
-// GUARDAR HERRAMIENTA (un solo listener). Genera codigo antes del INSERT.
+// GUARDAR HERRAMIENTA (un solo listener). Usa el identificador ya visible.
 $('v9-guardar-herr')?.addEventListener('click',async()=>{
   limpiarMensajeV11('v11-herr-mensaje');
   const id=$('v11-herr-id')?.value||'';
@@ -219,15 +221,14 @@ $('v9-guardar-herr')?.addEventListener('click',async()=>{
     const actual=id?(window.v9Herr||[]).find(x=>String(x.id)===String(id)):null;
 
     if(actual){
-      // EDICIÓN: solo se mandan propiedades que existan en la fila cargada.
       const registro={nombre,observaciones:$('v9-herr-obs')?.value.trim()||null};
       const candidatos={numero_serie:serie,serie,marca:$('v11-herr-marca')?.value.trim()||null,modelo:$('v11-herr-modelo')?.value.trim()||null,ubicacion:$('v11-herr-ubicacion')?.value.trim()||null};
       for(const [k,v] of Object.entries(candidatos))if(Object.prototype.hasOwnProperty.call(actual,k))registro[k]=v;
       const {error}=await sb.from('herramientas_especiales').update(registro).eq('id',id);
       if(error){mostrarErrorV11('v11-herr-mensaje',error,'No fue posible actualizar la herramienta.');return;}
     }else{
-      // ALTA: se genera codigo (NOT NULL) ANTES del INSERT.
-      const codigo=generarCodigoHerramientaV11();
+      // Toma el identificador ya visible; si falta, genera uno (nunca NULL).
+      const codigo=($('v9-herr-codigo')?.value.trim())||generarCodigoHerramientaV11();
       const registro={codigo,nombre,observaciones:$('v9-herr-obs')?.value.trim()||null};
       const {data,error}=await sb.from('herramientas_especiales').insert(registro).select().single();
       if(error){mostrarErrorV11('v11-herr-mensaje',error,'No fue posible registrar la herramienta.');return;}
@@ -289,13 +290,25 @@ $('v11-confirmar-devolucion')?.addEventListener('click',async()=>{
   cerrarModal('modal-v11-devolucion');await cargarHerramientas();dashboard();
 });
 
+// HISTORIAL: llama a la RPC v11_herramienta_historial.
 async function abrirHistorialHerramienta(id){
   const raw=(window.v9Herr||[]).find(x=>String(x.id)===String(id));const v=datosHerrV11(raw||{});
   if($('v11-historial-titulo'))$('v11-historial-titulo').textContent='Historial de herramienta';
   if($('v11-historial-subtitulo'))$('v11-historial-subtitulo').textContent=[v.codigo,v.nombre,v.serie].filter(Boolean).join(' · ')||'—';
   const tbody=$('v11-tabla-historial');if(!tbody)return;
+  tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Cargando…</td></tr>';
   abrirModal('modal-v11-historial');
-  tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">El historial detallado requiere el contrato de consulta correspondiente en Supabase.</td></tr>';
+  const {data,error}=await sb.rpc('v11_herramienta_historial',{p_herramienta_id:id});
+  if(error){
+    console.error('Error historial herramienta:',error);
+    tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial. Verifica que la función v11_herramienta_historial exista en Supabase.')}</td></tr>`;
+    return;
+  }
+  if(!data||!data.length){
+    tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Sin movimientos registrados.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=data.map(m=>`<tr><td>${escapar(fechaHora(m.salida_at))}</td><td>${escapar(m.devolucion_at?fechaHora(m.devolucion_at):'Pendiente')}</td><td>${escapar(texto(m.tecnico))}</td><td>${escapar(texto(m.orden_folio))}</td><td>${escapar(texto(m.entregado_por))}</td><td>${escapar(texto(m.recibido_por))}</td><td>${escapar([m.observacion_salida,m.observacion_devolucion].filter(Boolean).join(' / ')||'—')}</td></tr>`).join('');
 }
 
 // bitácora amigable admin
