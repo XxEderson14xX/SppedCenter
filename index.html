@@ -7,39 +7,583 @@
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-<div id="pantalla-login"><div class="login-card"><h1>Sistema Taller Automotriz</h1><p class="sub">Inicia sesión con tu usuario o correo</p><form id="form-login"><label for="login-correo">Usuario o correo</label><input type="text" id="login-correo" required autocomplete="username" placeholder="ecastillo o correo@ejemplo.com"><label for="login-clave">Contraseña</label><input type="password" id="login-clave" required autocomplete="current-password"><button type="submit">Ingresar</button><div id="login-error"></div></form></div></div>
-<div id="app-shell"><nav id="nav-lateral"><div class="marca">Taller Automotriz<small>Panel operativo · V9.2</small></div><a class="nav-item activo" data-modulo="inicio">Inicio</a><a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a><a class="nav-item" data-modulo="ordenes">Órdenes de trabajo</a><a class="nav-item" data-admin-only data-modulo="carga">Carga de trabajo</a><a class="nav-item" data-modulo="ingresos">Ingresos</a><a class="nav-item" data-modulo="herramientas">Herramienta especial</a><a class="nav-item" data-modulo="clientes">Clientes</a><a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a><a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a><a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a><a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a><a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a><div class="pie"><div id="pie-usuario">—</div><div id="pie-rol">—</div><button id="btn-salir">Cerrar sesión</button></div></nav>
-<main id="contenido">
-<section class="modulo activo" id="modulo-inicio"><div class="encabezado-modulo"><div><h2>Panel operativo</h2><p>Vista general del taller</p></div></div><div class="kpis" id="kpis-inicio"><div class="kpi"><div class="valor">—</div><div class="etiqueta">Cotizaciones abiertas</div></div><div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Pendientes de autorización</div></div><div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">En proceso</div></div><div class="kpi acento-navy"><div class="valor">—</div><div class="etiqueta">Con saldo pendiente</div></div></div><div class="panel"><h3>Operación de hoy</h3><div class="kpis"><div class="kpi"><div class="valor" id="dash-ot-abiertas">0</div><div class="etiqueta">Órdenes abiertas</div></div><div class="kpi acento-naranja"><div class="valor" id="dash-trabajos-pendientes">0</div><div class="etiqueta">Trabajos pendientes</div></div><div class="kpi acento-verde"><div class="valor" id="dash-ot-terminadas">0</div><div class="etiqueta">Órdenes terminadas hoy</div></div><div class="kpi acento-navy"><div class="valor" id="dash-ingresos-hoy">$0.00</div><div class="etiqueta">Ingresos hoy</div></div></div><h3>Avance</h3><div id="dash-avance-ordenes"></div><h3>Herramienta especial</h3><div id="dash-herramientas"></div><h3>Últimos pagos</h3><div id="dash-pagos"></div></div><div class="panel"><h3>Actividad reciente</h3><table class="tabla"><thead><tr><th>Folio</th><th>Placa</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="tabla-actividad-reciente"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody></table></div></section>
-<section class="modulo" id="modulo-cotizaciones"><div class="encabezado-modulo"><div><h2>Cotizaciones</h2><p>Ciclo completo: crear, autorizar, dar seguimiento y cerrar</p></div><button class="btn solo-staff" id="btn-nueva-cotizacion">+ Nueva cotización</button></div><div class="barra-acciones"><input type="search" id="buscar-cotizacion" placeholder="Buscar por folio, placa o cliente…"><select id="filtro-estado-comercial"><option value="">Estado comercial: todos</option><option value="borrador">Borrador</option><option value="enviada">Enviada</option><option value="pendiente_autorizacion">Pendiente de autorización</option><option value="autorizada">Autorizada</option><option value="rechazada">Rechazada</option><option value="cancelada">Cancelada</option><option value="cerrada">Cerrada</option></select><select id="filtro-estado-pago"><option value="">Pago: todos</option><option value="con_saldo">Con saldo pendiente</option><option value="pagada">Pagadas</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>Folio</th><th>Cliente</th><th>Vehículo</th><th>Total</th><th>Saldo</th><th>Comercial</th><th>Servicio</th><th></th></tr></thead><tbody id="tabla-cotizaciones"><tr><td colspan="8">Cargando…</td></tr></tbody></table></div></section>
-<section class="modulo" id="modulo-ordenes"><div class="encabezado-modulo"><div><h2>Órdenes de trabajo</h2><p>Trabajos autorizados, técnico y avance por checks.</p></div></div><div class="barra-acciones"><input type="search" id="buscar-orden"><select id="filtro-orden"><option value="">Todas</option><option value="abierta">Abiertas</option><option value="terminada">Terminadas</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>OT</th><th>Cotización</th><th>Vehículo</th><th>Técnico</th><th>Avance</th><th>Estado</th><th></th></tr></thead><tbody id="tabla-ordenes"></tbody></table></div></section>
-<section class="modulo" id="modulo-carga"><div class="encabezado-modulo"><div><h2>Carga de trabajo</h2><p>Distribución operativa de órdenes.</p></div><input type="month" id="carga-mes"></div><div id="carga-tecnicos"></div></section>
-<section class="modulo" id="modulo-ingresos"><div class="encabezado-modulo"><div><h2>Ingresos</h2><p>Consulta de pagos registrados desde cotizaciones.</p></div></div><div class="barra-acciones"><input type="date" id="ingresos-fecha"><select id="ingresos-metodo"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select></div><div class="kpis"><div class="kpi"><div class="valor" id="ing-total">$0.00</div><div class="etiqueta">Total válido</div></div><div class="kpi"><div class="valor" id="ing-efectivo">$0.00</div><div class="etiqueta">Efectivo</div></div><div class="kpi"><div class="valor" id="ing-transferencia">$0.00</div><div class="etiqueta">Transferencia</div></div><div class="kpi"><div class="valor" id="ing-tarjeta">$0.00</div><div class="etiqueta">Tarjeta</div></div></div><div class="panel"><table class="tabla"><thead><tr><th>Hora</th><th>Cotización</th><th>Cliente / placa</th><th>Método</th><th>Referencia</th><th>Importe</th><th>Estado</th></tr></thead><tbody id="tabla-ingresos"></tbody></table></div></section>
-<section class="modulo" id="modulo-herramientas"><div class="encabezado-modulo"><div><h2>Herramienta especial</h2></div><button class="btn" data-admin-only id="btn-nueva-herramienta">+ Nueva herramienta</button></div><div class="barra-acciones"><input type="search" id="buscar-herramienta"><select id="filtro-herramienta"><option value="">Todas</option><option value="disponible">Disponibles</option><option value="prestada">Prestadas</option><option value="fuera_servicio">Fuera de servicio</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>ID</th><th>Herramienta</th><th>Estado</th><th>Asignada a</th><th>Desde</th><th></th></tr></thead><tbody id="tabla-herramientas"></tbody></table></div></section>
-<section class="modulo" id="modulo-clientes"><div class="encabezado-modulo"><div><h2>Clientes</h2></div><button class="btn solo-staff" id="btn-nuevo-cliente">+ Nuevo cliente</button></div><div class="barra-acciones"><input type="search" id="buscar-cliente"></div><div class="panel"><table class="tabla"><thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Vehículos</th><th></th></tr></thead><tbody id="tabla-clientes"></tbody></table></div></section>
-<section class="modulo" id="modulo-vehiculos"><div class="encabezado-modulo"><div><h2>Vehículos e historial</h2></div><button class="btn solo-staff" id="btn-nuevo-vehiculo">+ Nuevo vehículo</button></div><div class="barra-acciones"><input type="search" id="buscar-vehiculo"></div><div class="panel"><table class="tabla"><thead><tr><th>Placa</th><th>VIN</th><th>Marca / Modelo</th><th>Año</th><th>Cliente</th><th>Km</th><th></th></tr></thead><tbody id="tabla-vehiculos"></tbody></table></div></section>
-<section class="modulo" id="modulo-catalogo"><div class="encabezado-modulo"><div><h2>Catálogo de servicios</h2><p>Catálogo Maestro: servicios, mano de obra, refacciones y combos. Los precios se capturan en cada cotización.</p></div><div><button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo concepto</button> <button class="btn secundario solo-staff" id="btn-nuevo-combo">🎁 Crear combo</button></div></div><div class="barra-acciones"><input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…"><select id="filtro-catalogo-tipo"><option value="">Tipo: todos</option><option value="CONCEPTO_SERVICIO">Servicios</option><option value="CONCEPTO_MANO_OBRA">Mano de obra</option><option value="CONCEPTO_REFACCION">Refacciones</option><option value="COMBO">Combos</option></select><select id="filtro-catalogo-categoria"><option value="">Categoría: todas</option></select><select id="filtro-catalogo-estado"><option value="">Estado: todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select><span id="catalogo-contador" class="hint"></span></div><div class="panel"><table class="tabla"><thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Estado</th><th></th></tr></thead><tbody id="tabla-catalogo"><tr><td colspan="6">Cargando…</td></tr></tbody></table></div></section>
-<section class="modulo" id="modulo-importacion"><div class="encabezado-modulo"><div><h2>Importación masiva</h2><p>Importación al catálogo maestro.</p></div></div><div class="panel"><input type="file" id="input-importar" accept=".csv"><div id="mensaje-importacion"></div><div id="previa-importacion"></div></div></section>
-<section class="modulo" id="modulo-usuarios"><div class="encabezado-modulo"><div><h2>Gestión de usuarios</h2></div></div><div class="barra-acciones"><input type="search" id="buscar-usuario"><button class="btn" id="btn-nuevo-usuario">+ Crear usuario</button><button class="btn secundario" id="btn-refrescar-usuarios">↻ Refrescar</button></div><div class="panel"><table class="tabla"><thead><tr><th>Usuario</th><th>Nombre completo</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody id="tabla-usuarios"></tbody></table></div></section>
-<section class="modulo" id="modulo-bitacora"><div class="encabezado-modulo"><div><h2>Bitácora</h2></div></div><div class="panel"><table class="tabla"><thead><tr><th>Fecha</th><th>Tabla</th><th>Acción</th><th>Detalle</th></tr></thead><tbody id="tabla-bitacora"></tbody></table></div></section>
-</main></div>
-<!-- Modales base -->
-<div class="modal-fondo" id="modal-cliente"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-cliente">×</button><h3 id="titulo-modal-cliente">Nuevo cliente</h3><form id="form-cliente"><input type="hidden" id="cliente-id"><div class="form-grid"><div class="campo"><label>Nombre completo *</label><input id="cliente-nombre" required></div><div class="campo"><label>Teléfono</label><input id="cliente-telefono"></div><div class="campo"><label>Correo</label><input id="cliente-correo"></div><div class="campo"><label>RFC</label><input id="cliente-rfc"></div></div><div class="campo"><label>Dirección</label><input id="cliente-direccion"></div><div class="campo"><label>Observaciones</label><textarea id="cliente-observaciones"></textarea></div><button type="submit" class="btn">Guardar</button><div id="mensaje-cliente"></div></form></div></div>
-<div class="modal-fondo" id="modal-vehiculo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-vehiculo">×</button><h3 id="titulo-modal-vehiculo">Nuevo vehículo</h3><form id="form-vehiculo"><input id="vehiculo-id" type="hidden"><select id="vehiculo-cliente"></select><input id="vehiculo-vin"><input id="vehiculo-placa"><input id="vehiculo-marca"><input id="vehiculo-modelo"><input id="vehiculo-anio"><input id="vehiculo-motor"><input id="vehiculo-combustible"><input id="vehiculo-color"><input id="vehiculo-km"><select id="cat-anio"></select><select id="cat-marca"></select><select id="cat-modelo"></select><select id="cat-version"></select><select id="cat-motor"></select><input type="checkbox" id="cat-manual"><button type="submit">Guardar</button><div id="mensaje-vehiculo"></div></form></div></div>
-<div class="modal-fondo" id="modal-catalogo-maestro"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-catalogo-maestro">×</button><h3 id="titulo-modal-catalogo">Nuevo concepto</h3><form id="form-catalogo-maestro"><input type="hidden" id="catalogo-id"><div class="form-grid"><div class="campo"><label>Tipo *</label><select id="catalogo-tipo"><option value="CONCEPTO_SERVICIO">Servicio</option><option value="CONCEPTO_MANO_OBRA">Mano de obra</option><option value="CONCEPTO_REFACCION">Refacción</option><option value="COMBO">Combo</option></select></div><div class="campo"><label>Código *</label><input id="catalogo-codigo" required></div><div class="campo"><label>Nombre *</label><input id="catalogo-nombre" required></div><div class="campo"><label>Categoría</label><select id="catalogo-categoria"></select></div><div class="campo"><label>Estado</label><select id="catalogo-activo"><option value="true">Activo</option><option value="false">Inactivo</option></select></div></div><button type="submit" class="btn">Guardar</button><div id="mensaje-catalogo-maestro"></div></form></div></div>
-<!-- Compatibilidad con app.js V8: modal legado oculto -->
-<div id="modal-servicio" style="display:none"><form id="form-servicio"><input id="servicio-id"><input id="servicio-codigo"><input id="servicio-nombre"><select id="servicio-categoria"></select><input id="servicio-unidad"><input id="servicio-precio"><input id="servicio-costo"><input id="servicio-impuesto"><select id="servicio-estado"><option value="activo">Activo</option></select><textarea id="servicio-descripcion"></textarea><div id="mensaje-servicio"></div></form></div>
-<!-- Cotización: estructura V9 interoperable con app.js -->
-<div class="modal-fondo" id="modal-cotizacion"><div class="modal" style="max-width:900px"><button class="cerrar" data-cerrar-modal="modal-cotizacion">×</button><h3 id="titulo-modal-cotizacion">Nueva cotización</h3><input type="hidden" id="cotizacion-id"><div class="pestanas"><div class="pestana activa" data-pestana="datos">Datos y conceptos</div><div class="pestana" data-pestana="pagos">Pagos</div><div class="pestana" data-pestana="seguimiento">Seguimiento</div><div class="pestana" data-pestana="archivos">Archivos</div></div><div class="vista-pestana" id="pestana-datos"><input id="cliente-buscar"><div id="cliente-sugerencias"></div><div id="cliente-elegido"></div><input type="radio" name="modo-cliente" value="existente" checked><input type="radio" name="modo-cliente" value="nuevo"><div id="cliente-modo-existente"></div><div id="cliente-modo-nuevo"><input id="ncli-nombre"><input id="ncli-telefono"><div id="ncli-tel-alerta"></div><input id="ncli-correo"><input id="ncli-rfc"><input id="ncli-direccion"><textarea id="ncli-obs"></textarea></div><input type="radio" name="modo-vehiculo" value="existente" checked><input type="radio" name="modo-vehiculo" value="nuevo"><div id="vehiculo-modo-existente"><select id="vehiculo-existente-select"></select></div><div id="vehiculo-modo-nuevo"><select id="nveh-anio"></select><select id="nveh-marca"></select><select id="nveh-modelo"></select><select id="nveh-version"></select><select id="nveh-motor"></select><input type="checkbox" id="nveh-manual"><input id="nveh-marca-manual"><input id="nveh-modelo-manual"><input id="nveh-vin"><div id="nveh-vin-alerta"></div><input id="nveh-placa"><input id="nveh-color"><input id="nveh-km"></div><input id="cotizacion-entrega" type="date"><input id="cotizacion-km"><select id="cotizacion-estado-comercial"><option value="borrador">Borrador</option><option value="enviada">Enviada</option><option value="pendiente_autorizacion">Pendiente de autorización</option><option value="autorizada">Autorizada</option><option value="rechazada">Rechazada</option><option value="cancelada">Cancelada</option><option value="cerrada">Cerrada</option></select><select id="cotizacion-estado-servicio"><option value="sin_iniciar">Sin iniciar</option><option value="diagnostico">Diagnóstico</option><option value="esperando_refacciones">Esperando refacciones</option><option value="en_proceso">En proceso</option><option value="terminado">Terminado</option><option value="vehiculo_entregado">Vehículo entregado</option></select><textarea id="cotizacion-observaciones"></textarea><div id="panel-cierre"><textarea id="cotizacion-notas-finales"></textarea><input type="checkbox" id="cotizacion-cerrar-adeudo"><div id="campos-adeudo"><input id="cotizacion-motivo-adeudo"><input id="cotizacion-fecha-compromiso"></div></div><select id="cat-cot-categoria"></select><select id="cat-cot-concepto"></select><button id="btn-cat-agregar">+ Agregar a la cotización</button><div id="v9-adicionales"><button id="btn-v9-adicional">+ Agregar adicional</button><div id="v9-lista-adicionales"></div></div><table id="tabla-conceptos"><tbody id="cuerpo-conceptos"></tbody></table><button id="btn-agregar-concepto">+ Agregar concepto manual</button><span id="cotizacion-subtotal">0.00</span><span id="cotizacion-descuento">0.00</span><span id="cotizacion-total">0.00</span><span id="v9-desc-texto">Sin descuento</span><div class="v9-descuento"><input type="radio" name="v9-desc-tipo" value="ninguno" checked><input type="radio" name="v9-desc-tipo" value="porcentaje"><input type="radio" name="v9-desc-tipo" value="monto"><input id="v9-desc-valor" value="0"></div><button id="btn-pdf-cotizacion">Descargar PDF</button><button id="btn-v9-ot">Generar / abrir OT</button><button id="btn-guardar-cotizacion">Guardar cotización</button><div id="mensaje-cotizacion"></div></div><div id="pestana-pagos" class="vista-pestana"><input id="pago-importe"><select id="pago-metodo"><option value="efectivo">Efectivo</option></select><input id="pago-referencia"><input id="pago-comentario"><button id="btn-agregar-pago">Agregar pago</button><table><tbody id="tabla-pagos-cotizacion"></tbody></table><strong id="cotizacion-saldo">0.00</strong></div><div id="pestana-seguimiento" class="vista-pestana"><textarea id="seguimiento-texto"></textarea><button id="btn-agregar-seguimiento">Agregar</button><ul id="lista-seguimiento"></ul></div><div id="pestana-archivos" class="vista-pestana"><select id="archivo-tipo"></select><input type="file" id="archivo-input"><button id="btn-subir-archivo">Subir</button><div id="mensaje-archivo"></div><div id="galeria-archivos"></div></div></div></div>
-<div class="modal-fondo" id="modal-combo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-combo">×</button><h3>Crear combo / paquete</h3><input id="combo-nombre"><select id="combo-cat"></select><select id="combo-concepto"></select><input id="combo-cantidad" value="1"><button id="btn-combo-add-item">+ Añadir</button><table><tbody id="combo-lista-items"></tbody></table><button id="btn-guardar-combo">Guardar combo</button><div id="mensaje-combo"></div></div></div>
-<!-- Usuarios / historial -->
-<div id="modal-usuario" class="modal-fondo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-usuario">×</button><input id="usuario-correo-display"><input id="usuario-nombre"><input id="usuario-username"><button id="btn-generar-username"></button><div id="username-disponibilidad"></div><select id="usuario-rol"></select><select id="usuario-activo"></select><input id="usuario-id"><input id="usuario-password"><button id="btn-reset-password"></button><button id="btn-eliminar-usuario"></button><button id="btn-guardar-usuario"></button><div id="mensaje-usuario"></div></div></div>
-<div id="modal-crear-usuario" class="modal-fondo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-crear-usuario">×</button><input id="nuevo-nombre"><input id="nuevo-username"><button id="btn-generar-nuevo-username"></button><div id="nuevo-username-estado"></div><input id="nuevo-correo"><input id="nuevo-password"><select id="nuevo-rol"></select><button id="btn-confirmar-crear-usuario"></button><div id="mensaje-crear-usuario"></div></div></div>
-<div id="modal-historial" class="modal-fondo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-historial">×</button><h3 id="titulo-historial"></h3><p id="subtitulo-historial"></p><div id="kpis-historial"><div class="valor"></div><div class="valor"></div><div class="valor"></div></div><table><tbody id="tabla-historial-cotizaciones"></tbody></table><ul id="lista-historial-placas"></ul><ul id="lista-historial-seguimiento"></ul></div></div>
-<!-- V9 -->
-<div class="modal-fondo" id="modal-v9-orden"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-orden">×</button><h3 id="v9-ot-titulo"></h3><div id="v9-ot-resumen"></div><div id="v9-ot-asignacion"><select id="v9-ot-tecnico"></select></div><div id="v9-ot-trabajos"></div><textarea id="v9-ot-observaciones"></textarea><button id="v9-imprimir-ot">Imprimir</button><button id="v9-guardar-ot">Guardar avance</button><button id="v9-finalizar-ot">Finalizar</button></div></div>
-<div class="modal-fondo" id="modal-v9-adicional"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-adicional">×</button><input id="v9-ad-desc"><input id="v9-ad-cant" value="1"><input id="v9-ad-precio"><textarea id="v9-ad-obs"></textarea><button id="v9-guardar-adicional">Guardar</button></div></div>
-<div class="modal-fondo" id="modal-v9-herr"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-herr">×</button><input id="v9-herr-codigo"><input id="v9-herr-nombre"><textarea id="v9-herr-obs"></textarea><button id="v9-guardar-herr">Guardar</button></div></div>
-<div class="modal-fondo" id="modal-v9-prestamo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-prestamo">×</button><input id="v9-prestamo-id"><select id="v9-prestamo-tecnico"></select><select id="v9-prestamo-ot"></select><textarea id="v9-prestamo-obs"></textarea><button id="v9-confirmar-prestamo">Prestar</button></div></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script><script src="assets/config.js"></script><script src="assets/app.js"></script><script src="assets/v9.js"></script><script src="assets/catalogo_maestro_v9_2.js"></script>
-</body></html>
+<!-- ======================= LOGIN ======================= -->
+<div id="pantalla-login">
+  <div class="login-card">
+    <h1>Sistema Taller Automotriz</h1>
+    <p class="sub">Inicia sesión con tu usuario o correo</p>
+    <form id="form-login">
+      <label for="login-correo">Usuario o correo</label>
+      <input type="text" id="login-correo" required autocomplete="username" placeholder="ecastillo o correo@ejemplo.com">
+      <label for="login-clave">Contraseña</label>
+      <input type="password" id="login-clave" required autocomplete="current-password">
+      <button type="submit">Ingresar</button>
+      <div id="login-error"></div>
+    </form>
+  </div>
+</div>
+<!-- ======================= APP ======================= -->
+<div id="app-shell">
+  <nav id="nav-lateral">
+    <div class="marca">Taller Automotriz<small>Panel operativo · V10</small></div>
+    <a class="nav-item activo" data-modulo="inicio">Inicio</a>
+    <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
+    <a class="nav-item" data-modulo="ordenes">Órdenes de trabajo</a>
+    <a class="nav-item" data-admin-only data-modulo="carga">Carga de trabajo</a>
+    <a class="nav-item" data-modulo="ingresos">Ingresos</a>
+    <a class="nav-item" data-modulo="herramientas">Herramienta especial</a>
+    <a class="nav-item" data-modulo="clientes">Clientes</a>
+    <a class="nav-item" data-modulo="vehiculos">Vehículos e historial</a>
+    <a class="nav-item" data-modulo="catalogo">Catálogo de servicios</a>
+    <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
+    <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
+    <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
+    <div class="pie">
+      <div id="pie-usuario">—</div>
+      <div id="pie-rol">—</div>
+      <button id="btn-salir">Cerrar sesión</button>
+    </div>
+  </nav>
+  <main id="contenido">
+    <!-- INICIO -->
+    <section class="modulo activo" id="modulo-inicio">
+      <div class="encabezado-modulo"><div><h2>Panel operativo</h2><p>Vista general del taller</p></div></div>
+      <div class="kpis" id="kpis-inicio">
+        <div class="kpi"><div class="valor">—</div><div class="etiqueta">Cotizaciones abiertas</div></div>
+        <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Pendientes de autorización</div></div>
+        <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">En proceso</div></div>
+        <div class="kpi acento-navy"><div class="valor">—</div><div class="etiqueta">Con saldo pendiente</div></div>
+      </div>
+      <div class="panel"><h3>Operación de hoy</h3><div class="kpis"><div class="kpi"><div class="valor" id="dash-ot-abiertas">0</div><div class="etiqueta">Órdenes abiertas</div></div><div class="kpi acento-naranja"><div class="valor" id="dash-trabajos-pendientes">0</div><div class="etiqueta">Trabajos pendientes</div></div><div class="kpi acento-verde"><div class="valor" id="dash-ot-terminadas">0</div><div class="etiqueta">Órdenes terminadas hoy</div></div><div class="kpi acento-navy"><div class="valor" id="dash-ingresos-hoy">$0.00</div><div class="etiqueta">Ingresos hoy</div></div></div><h3>Avance</h3><div id="dash-avance-ordenes"></div><h3 style="margin-top:18px;">Herramienta especial</h3><div id="dash-herramientas"></div><h3 style="margin-top:18px;">Últimos pagos</h3><div id="dash-pagos"></div></div>
+      <div class="panel">
+        <h3>Actividad reciente</h3>
+        <table class="tabla">
+          <thead><tr><th>Folio</th><th>Placa</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead>
+          <tbody id="tabla-actividad-reciente"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- COTIZACIONES -->
+    <section class="modulo" id="modulo-cotizaciones">
+      <div class="encabezado-modulo">
+        <div><h2>Cotizaciones</h2><p>Ciclo completo: crear, autorizar, dar seguimiento y cerrar</p></div>
+        <button class="btn solo-staff" id="btn-nueva-cotizacion">+ Nueva cotización</button>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-cotizacion" placeholder="Buscar por folio, placa o cliente…">
+        <select id="filtro-estado-comercial">
+          <option value="">Estado comercial: todos</option>
+          <option value="borrador">Borrador</option>
+          <option value="enviada">Enviada</option>
+          <option value="pendiente_autorizacion">Pendiente de autorización</option>
+          <option value="autorizada">Autorizada</option>
+          <option value="rechazada">Rechazada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="cerrada">Cerrada</option>
+        </select>
+        <select id="filtro-estado-pago">
+          <option value="">Pago: todos</option>
+          <option value="con_saldo">Con saldo pendiente</option>
+          <option value="pagada">Pagadas</option>
+        </select>
+        <div class="spacer"></div>
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Folio</th><th>Cliente</th><th>Vehículo</th><th>Total</th><th>Saldo</th><th>Comercial</th><th>Servicio</th><th></th></tr></thead>
+          <tbody id="tabla-cotizaciones"><tr><td colspan="8" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- V9: ÓRDENES -->
+    <section class="modulo" id="modulo-ordenes"><div class="encabezado-modulo"><div><h2>Órdenes de trabajo</h2><p>Trabajos autorizados, técnico y avance por checks.</p></div></div><div class="barra-acciones"><input type="search" id="buscar-orden" placeholder="Buscar OT, cotización o placa…"><select id="filtro-orden"><option value="">Todas</option><option value="abierta">Abiertas</option><option value="terminada">Terminadas</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>OT</th><th>Cotización</th><th>Vehículo</th><th>Técnico</th><th>Avance</th><th>Estado</th><th></th></tr></thead><tbody id="tabla-ordenes"></tbody></table></div></section>
+    <!-- V9: CARGA OPERATIVA. Sin score ni ranking. -->
+    <section class="modulo" id="modulo-carga"><div class="encabezado-modulo"><div><h2>Carga de trabajo</h2><p>Distribución operativa de órdenes. No genera rankings ni evaluaciones.</p></div><input type="month" id="carga-mes"></div><div id="carga-tecnicos"></div></section>
+    <!-- V9: INGRESOS, solo consulta -->
+    <section class="modulo" id="modulo-ingresos"><div class="encabezado-modulo"><div><h2>Ingresos</h2><p>Consulta de pagos registrados desde cotizaciones.</p></div></div><div class="barra-acciones"><input type="date" id="ingresos-fecha"><select id="ingresos-metodo"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select></div><div class="kpis"><div class="kpi"><div class="valor" id="ing-total">$0.00</div><div class="etiqueta">Total válido</div></div><div class="kpi"><div class="valor" id="ing-efectivo">$0.00</div><div class="etiqueta">Efectivo</div></div><div class="kpi"><div class="valor" id="ing-transferencia">$0.00</div><div class="etiqueta">Transferencia</div></div><div class="kpi"><div class="valor" id="ing-tarjeta">$0.00</div><div class="etiqueta">Tarjeta</div></div></div><div class="panel"><table class="tabla"><thead><tr><th>Hora</th><th>Cotización</th><th>Cliente / placa</th><th>Método</th><th>Referencia</th><th>Importe</th><th>Estado</th></tr></thead><tbody id="tabla-ingresos"></tbody></table></div></section>
+    <!-- V9: HERRAMIENTA ESPECIAL -->
+    <section class="modulo" id="modulo-herramientas"><div class="encabezado-modulo"><div><h2>Herramienta especial</h2><p>Control de custodia y disponibilidad.</p></div><button class="btn" data-admin-only id="btn-nueva-herramienta">+ Nueva herramienta</button></div><div class="barra-acciones"><input type="search" id="buscar-herramienta" placeholder="Buscar herramienta…"><select id="filtro-herramienta"><option value="">Todas</option><option value="disponible">Disponibles</option><option value="prestada">Prestadas</option><option value="fuera_servicio">Fuera de servicio</option></select></div><div class="panel"><table class="tabla"><thead><tr><th>ID</th><th>Herramienta</th><th>Estado</th><th>Asignada a</th><th>Desde</th><th></th></tr></thead><tbody id="tabla-herramientas"></tbody></table></div></section>
+    <!-- CLIENTES -->
+    <section class="modulo" id="modulo-clientes">
+      <div class="encabezado-modulo">
+        <div><h2>Clientes</h2><p>Alta, edición y consulta</p></div>
+        <button class="btn solo-staff" id="btn-nuevo-cliente">+ Nuevo cliente</button>
+      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-cliente" placeholder="Buscar por nombre, teléfono o correo…"></div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Vehículos</th><th></th></tr></thead>
+          <tbody id="tabla-clientes"><tr><td colspan="5" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- VEHÍCULOS -->
+    <section class="modulo" id="modulo-vehiculos">
+      <div class="encabezado-modulo">
+        <div><h2>Vehículos e historial</h2><p>Busca por placa, VIN, marca o modelo</p></div>
+        <button class="btn solo-staff" id="btn-nuevo-vehiculo">+ Nuevo vehículo</button>
+      </div>
+      <div class="barra-acciones"><input type="search" id="buscar-vehiculo" placeholder="Buscar por placa, VIN, marca o modelo…"></div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Placa</th><th>VIN</th><th>Marca / Modelo</th><th>Año</th><th>Cliente</th><th>Km</th><th></th></tr></thead>
+          <tbody id="tabla-vehiculos"><tr><td colspan="7" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- CATÁLOGO -->
+    <section class="modulo" id="modulo-catalogo">
+      <div class="encabezado-modulo">
+        <div><h2>Catálogo Maestro</h2><p>Servicios, mano de obra, refacciones/consumibles y combos. Los precios se capturan en cada cotización.</p></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn solo-staff" id="btn-nuevo-servicio">+ Nuevo concepto</button>
+          <button class="btn secundario solo-staff" id="btn-nuevo-combo">🎁 Crear combo</button>
+        </div>
+      </div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
+        <select id="filtro-catalogo-tipo"><option value="">Tipo: todos</option><option value="CONCEPTO_SERVICIO">Servicio</option><option value="CONCEPTO_MANO_OBRA">Mano de obra</option><option value="CONCEPTO_REFACCION">Refacción / consumible</option><option value="COMBO">Combo / paquete</option></select>
+        <select id="filtro-catalogo-categoria"><option value="">Categoría: todas</option></select>
+        <select id="filtro-catalogo-estado"><option value="">Estado: todos</option><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select>
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tabla-catalogo"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- IMPORTACIÓN -->
+    <section class="modulo" id="modulo-importacion">
+      <div class="encabezado-modulo">
+        <div><h2>Importación masiva del Catálogo Maestro</h2><p>Sube un CSV con columnas: codigo, nombre, tipo, categoria, estado. Tipos válidos: CONCEPTO_SERVICIO, CONCEPTO_MANO_OBRA, CONCEPTO_REFACCION.</p></div>
+      </div>
+      <div class="panel">
+        <input type="file" id="input-importar" accept=".csv">
+        <div id="mensaje-importacion" style="margin-top:10px;"></div>
+        <div id="previa-importacion"></div>
+      </div>
+    </section>
+    <!-- USUARIOS -->
+    <section class="modulo" id="modulo-usuarios">
+      <div class="encabezado-modulo"><div><h2>Gestión de usuarios</h2><p>Crea y administra los accesos al sistema</p></div></div>
+      <div class="barra-acciones">
+        <input type="search" id="buscar-usuario" placeholder="Buscar por nombre o usuario…">
+        <div class="spacer"></div>
+        <button class="btn" id="btn-nuevo-usuario">+ Crear usuario</button>
+        <button class="btn secundario" id="btn-refrescar-usuarios">↻ Refrescar</button>
+      </div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Usuario</th><th>Nombre completo</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tabla-usuarios"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- BITÁCORA -->
+    <section class="modulo" id="modulo-bitacora">
+      <div class="encabezado-modulo"><div><h2>Bitácora</h2><p>Acciones sensibles registradas por el sistema</p></div></div>
+      <div class="panel">
+        <table class="tabla">
+          <thead><tr><th>Fecha</th><th>Tabla</th><th>Acción</th><th>Detalle</th></tr></thead>
+          <tbody id="tabla-bitacora"><tr><td colspan="4" class="vacio-tabla">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+<!-- ======================= MODAL: CLIENTE ======================= -->
+<div class="modal-fondo" id="modal-cliente">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-cliente">×</button>
+    <h3 id="titulo-modal-cliente">Nuevo cliente</h3>
+    <form id="form-cliente">
+      <input type="hidden" id="cliente-id">
+      <div class="form-grid">
+        <div class="campo"><label>Nombre completo *</label><input id="cliente-nombre" required></div>
+        <div class="campo"><label>Teléfono</label><input id="cliente-telefono"></div>
+        <div class="campo"><label>Correo</label><input type="email" id="cliente-correo"></div>
+        <div class="campo"><label>RFC</label><input id="cliente-rfc"></div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Dirección</label><input id="cliente-direccion"></div>
+      <div class="campo" style="margin-top:12px;"><label>Observaciones</label><textarea id="cliente-observaciones"></textarea></div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-cliente">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+      <div id="mensaje-cliente"></div>
+    </form>
+  </div>
+</div>
+<!-- ======================= MODAL: VEHÍCULO ======================= -->
+<div class="modal-fondo" id="modal-vehiculo">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-vehiculo">×</button>
+    <h3 id="titulo-modal-vehiculo">Nuevo vehículo</h3>
+    <form id="form-vehiculo">
+      <input type="hidden" id="vehiculo-id">
+      <div class="campo" style="grid-column:1/-1; margin-bottom:12px;">
+        <label>Selecciona del catálogo (Año → Marca → Modelo → Versión → Motor)</label>
+        <div class="form-grid">
+          <div class="campo"><label>Año</label><select id="cat-anio"><option value="">—</option></select></div>
+          <div class="campo"><label>Marca</label><select id="cat-marca"><option value="">—</option></select></div>
+          <div class="campo"><label>Modelo</label><select id="cat-modelo"><option value="">—</option></select></div>
+          <div class="campo"><label>Versión (opcional)</label><select id="cat-version"><option value="">—</option></select></div>
+          <div class="campo"><label>Motor (opcional)</label><select id="cat-motor"><option value="">—</option></select></div>
+        </div>
+        <label class="hint"><input type="checkbox" id="cat-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar a mano</label>
+      </div>
+      <div class="form-grid">
+        <div class="campo"><label>Cliente *</label><select id="vehiculo-cliente" required></select></div>
+        <div class="campo"><label>VIN / NIV (identidad permanente)</label><input id="vehiculo-vin" placeholder="17 caracteres (recomendado)"></div>
+        <div class="campo"><label>Placa *</label><input id="vehiculo-placa" required></div>
+        <div class="campo"><label>Marca *</label><input id="vehiculo-marca" required></div>
+        <div class="campo"><label>Modelo *</label><input id="vehiculo-modelo" required></div>
+        <div class="campo"><label>Año</label><input type="number" id="vehiculo-anio"></div>
+        <div class="campo"><label>Motor</label><input id="vehiculo-motor"></div>
+        <div class="campo"><label>Combustible</label><input id="vehiculo-combustible"></div>
+        <div class="campo"><label>Color</label><input id="vehiculo-color"></div>
+        <div class="campo"><label>Kilometraje actual</label><input type="number" id="vehiculo-km"></div>
+      </div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-vehiculo">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+      <div id="mensaje-vehiculo"></div>
+    </form>
+  </div>
+</div>
+<!-- ======================= MODAL: SERVICIO ======================= -->
+<div class="modal-fondo" id="modal-servicio">
+  <div class="modal">
+    <button class="cerrar" data-cerrar-modal="modal-servicio">×</button>
+    <h3 id="titulo-modal-servicio">Nuevo concepto</h3>
+    <form id="form-servicio">
+      <input type="hidden" id="servicio-id">
+      <div class="form-grid">
+        <div class="campo"><label>Código *</label><input id="servicio-codigo" required></div>
+        <div class="campo"><label>Nombre *</label><input id="servicio-nombre" required></div>
+        <div class="campo"><label>Tipo *</label><select id="servicio-tipo"><option value="CONCEPTO_SERVICIO">Servicio</option><option value="CONCEPTO_MANO_OBRA">Mano de obra</option><option value="CONCEPTO_REFACCION">Refacción / consumible</option></select></div>
+        <div class="campo"><label>Categoría *</label><select id="servicio-categoria" required></select></div>
+        <div class="campo"><label>Estado</label><select id="servicio-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Descripción</label><textarea id="servicio-descripcion" placeholder="Descripción visible del concepto"></textarea></div>
+      <div style="margin-top:16px; text-align:right;"><button type="button" class="btn secundario" data-cerrar-modal="modal-servicio">Cancelar</button><button type="submit" class="btn">Guardar</button></div>
+      <div id="mensaje-servicio"></div>
+    </form>
+  </div>
+</div>
+<!-- ======================= MODAL: COTIZACIÓN ======================= -->
+<div class="modal-fondo" id="modal-cotizacion">
+  <div class="modal" style="max-width:900px;">
+    <button class="cerrar" data-cerrar-modal="modal-cotizacion">×</button>
+    <h3 id="titulo-modal-cotizacion">Nueva cotización</h3>
+    <input type="hidden" id="cotizacion-id">
+    <div class="pestanas">
+      <div class="pestana activa" data-pestana="datos">Datos y conceptos</div>
+      <div class="pestana" data-pestana="pagos">Pagos</div>
+      <div class="pestana" data-pestana="seguimiento">Seguimiento</div>
+      <div class="pestana" data-pestana="archivos">Archivos</div>
+    </div>
+    <div class="vista-pestana" id="pestana-datos">
+      <!-- CLIENTE inline -->
+      <div class="bloque-inline">
+        <div class="bloque-titulo"><span>Cliente *</span>
+          <div class="toggle-modo">
+            <label><input type="radio" name="modo-cliente" value="existente" checked> Buscar existente</label>
+            <label><input type="radio" name="modo-cliente" value="nuevo"> Cliente nuevo</label>
+          </div>
+        </div>
+        <div id="cliente-modo-existente">
+          <input type="search" id="cliente-buscar" placeholder="Escribe nombre, teléfono o correo…" autocomplete="off" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;">
+          <div id="cliente-sugerencias" class="sugerencias"></div>
+          <div id="cliente-elegido" class="chip-elegido" style="display:none;"></div>
+        </div>
+        <div id="cliente-modo-nuevo" style="display:none;">
+          <div class="form-grid">
+            <div class="campo"><label>Nombre completo *</label><input id="ncli-nombre"></div>
+            <div class="campo"><label>Teléfono *</label><input id="ncli-telefono" autocomplete="off"><div id="ncli-tel-alerta" style="font-size:11px; margin-top:3px; min-height:14px;"></div></div>
+            <div class="campo"><label>Correo</label><input type="email" id="ncli-correo"></div>
+            <div class="campo"><label>RFC</label><input id="ncli-rfc"></div>
+            <div class="campo" style="grid-column:1/-1;"><label>Dirección</label><input id="ncli-direccion"></div>
+            <div class="campo" style="grid-column:1/-1;"><label>Observaciones</label><textarea id="ncli-obs"></textarea></div>
+          </div>
+        </div>
+      </div>
+      <!-- VEHÍCULO inline -->
+      <div class="bloque-inline">
+        <div class="bloque-titulo"><span>Vehículo *</span>
+          <div class="toggle-modo">
+            <label><input type="radio" name="modo-vehiculo" value="existente" checked> Auto del cliente</label>
+            <label><input type="radio" name="modo-vehiculo" value="nuevo"> Auto nuevo</label>
+          </div>
+        </div>
+        <div id="vehiculo-modo-existente">
+          <select id="vehiculo-existente-select" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;">
+            <option value="">Primero elige un cliente…</option>
+          </select>
+          <small class="hint">Cada auto conserva su propio historial aunque cambie de placa (se identifica por VIN).</small>
+        </div>
+        <div id="vehiculo-modo-nuevo" style="display:none;">
+          <div class="form-grid">
+            <div class="campo"><label>Año *</label><select id="nveh-anio"><option value="">—</option></select></div>
+            <div class="campo"><label>Marca *</label><select id="nveh-marca"><option value="">—</option></select></div>
+            <div class="campo"><label>Modelo *</label><select id="nveh-modelo"><option value="">—</option></select></div>
+            <div class="campo"><label>Versión (opcional)</label><select id="nveh-version"><option value="">—</option></select></div>
+            <div class="campo"><label>Motor (opcional)</label><select id="nveh-motor"><option value="">—</option></select></div>
+            <div class="campo" style="grid-column:1/-1;"><label class="hint"><input type="checkbox" id="nveh-manual" style="width:auto; margin-right:6px;">El auto no está en el catálogo — capturar marca/modelo a mano</label></div>
+            <div class="campo"><label>Marca (manual)</label><input id="nveh-marca-manual" disabled></div>
+            <div class="campo"><label>Modelo (manual)</label><input id="nveh-modelo-manual" disabled></div>
+            <div class="campo"><label>VIN / NIV (identidad permanente)</label><input id="nveh-vin" placeholder="17 caracteres (recomendado)" autocomplete="off"><div id="nveh-vin-alerta" style="font-size:11px; margin-top:3px; min-height:14px;"></div></div>
+            <div class="campo"><label>Placa *</label><input id="nveh-placa" placeholder="Placa actual"></div>
+            <div class="campo"><label>Color</label><input id="nveh-color"></div>
+            <div class="campo"><label>Kilometraje</label><input type="number" id="nveh-km"></div>
+          </div>
+          <small class="hint">💡 Si aún no tienes el VIN, deja el campo vacío: usaremos la placa temporalmente y podrás agregar el VIN después sin perder el historial.</small>
+        </div>
+      </div>
+      <!-- Datos de la visita -->
+      <div class="form-grid">
+        <div class="campo"><label>Entrega estimada</label><input type="date" id="cotizacion-entrega"></div>
+        <div class="campo"><label>Kilometraje de esta visita</label><input type="number" id="cotizacion-km"></div>
+        <div class="campo"><label>Estado comercial</label>
+          <select id="cotizacion-estado-comercial">
+            <option value="borrador">Borrador</option>
+            <option value="enviada">Enviada</option>
+            <option value="pendiente_autorizacion">Pendiente de autorización</option>
+            <option value="autorizada">Autorizada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="cerrada">Cerrada</option>
+          </select>
+        </div>
+        <div class="campo"><label>Estado de servicio</label>
+          <select id="cotizacion-estado-servicio">
+            <option value="sin_iniciar">Sin iniciar</option>
+            <option value="diagnostico">Diagnóstico</option>
+            <option value="esperando_refacciones">Esperando refacciones</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="terminado">Terminado</option>
+            <option value="vehiculo_entregado">Vehículo entregado</option>
+          </select>
+        </div>
+      </div>
+      <div class="campo" style="margin-top:12px;"><label>Observaciones</label><textarea id="cotizacion-observaciones"></textarea></div>
+      <div class="panel" id="panel-cierre" style="box-shadow:none; border:1px solid var(--border); margin-top:14px; display:none;">
+        <h3>Requisitos de cierre</h3>
+        <div class="campo"><label>Notas finales (obligatorio para cerrar)</label><textarea id="cotizacion-notas-finales"></textarea></div>
+        <div class="campo" style="margin-top:10px;"><label><input type="checkbox" id="cotizacion-cerrar-adeudo" style="width:auto; margin-right:6px;">Cerrar con adeudo (requiere permiso especial)</label></div>
+        <div id="campos-adeudo" style="display:none; margin-top:10px;">
+          <div class="form-grid dos">
+            <div class="campo"><label>Motivo del adeudo *</label><input id="cotizacion-motivo-adeudo"></div>
+            <div class="campo"><label>Fecha compromiso de pago *</label><input type="date" id="cotizacion-fecha-compromiso"></div>
+          </div>
+        </div>
+      </div>
+      <!-- V8 · Selector en cascada del catálogo maestro -->
+      <div class="bloque-inline" style="margin-top:18px;">
+        <div class="bloque-titulo"><span>Agregar desde el catálogo</span></div>
+        <div class="form-grid">
+          <div class="campo"><label>Paso 1 · Categoría</label><select id="cat-cot-categoria"><option value="">Selecciona…</option></select></div>
+          <div class="campo"><label>Paso 2 · Concepto o combo</label><select id="cat-cot-concepto"><option value="">Primero elige categoría…</option></select></div>
+        </div>
+        <button type="button" class="btn secundario pequeno solo-staff" id="btn-cat-agregar" style="margin-top:8px;">+ Agregar a la cotización</button>
+        <small class="hint">Al elegir un combo se insertan todos sus conceptos con precio $0 para que captures el importe. También puedes agregar conceptos manuales abajo.</small>
+      </div>
+      <div id="v9-adicionales" class="panel" style="box-shadow:none;border:1px solid var(--border);display:none;margin-top:16px;"><div class="bloque-titulo"><span>Adicionales detectados durante el servicio</span><button class="btn secundario pequeno solo-staff" id="btn-v9-adicional">+ Agregar adicional</button></div><div id="v9-lista-adicionales"></div></div>
+      <h3 style="margin-top:18px;">Conceptos</h3>
+      <table class="detalle-items" id="tabla-conceptos">
+        <thead><tr><th style="width:120px;">Tipo</th><th>Descripción</th><th style="width:70px;">Cant.</th><th style="width:100px;">Precio</th><th style="width:100px;">Importe</th><th></th></tr></thead>
+        <tbody id="cuerpo-conceptos"></tbody>
+      </table>
+      <button type="button" class="btn secundario pequeno solo-staff" id="btn-agregar-concepto" style="margin-top:8px;">+ Agregar concepto manual</button>
+      <div class="totales-cotizacion">
+        Subtotal: $<span id="cotizacion-subtotal">0.00</span><br>
+        Descuento general: <span id="v9-desc-texto">Sin descuento</span><br><div class="v9-descuento solo-staff"><label><input type="radio" name="v9-desc-tipo" value="ninguno" checked> Sin descuento</label><label><input type="radio" name="v9-desc-tipo" value="porcentaje"> %</label><label><input type="radio" name="v9-desc-tipo" value="monto"> $ fijo</label><input type="number" id="v9-desc-valor" min="0" step="1" value="0" disabled></div>Descuento aplicado: $<span id="cotizacion-descuento">0.00</span><br>
+        <strong>Total: $<span id="cotizacion-total">0.00</span></strong>
+      </div>
+      <div style="margin-top:16px; text-align:right;">
+        <button type="button" class="btn secundario" id="btn-pdf-cotizacion">Descargar PDF</button> <button type="button" class="btn secundario" id="btn-v9-ot" style="display:none;">Generar / abrir OT</button>
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-cotizacion">Cerrar</button>
+        <button type="button" class="btn solo-staff" id="btn-guardar-cotizacion">Guardar cotización</button>
+      </div>
+      <div id="mensaje-cotizacion"></div>
+    </div>
+    <div class="vista-pestana" id="pestana-pagos" style="display:none;">
+      <div class="panel" style="box-shadow:none; border:1px solid var(--border);">
+        <h3>Registrar pago</h3>
+        <div class="form-grid">
+          <div class="campo"><label>Importe</label><input type="number" step="0.01" id="pago-importe"></div>
+          <div class="campo"><label>Método</label>
+            <select id="pago-metodo"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="deposito">Depósito</option><option value="otro">Otro</option></select>
+          </div>
+          <div class="campo"><label>Referencia</label><input id="pago-referencia"></div>
+          <div class="campo"><label>Comentario</label><input id="pago-comentario"></div>
+        </div>
+        <button type="button" class="btn pequeno solo-staff" id="btn-agregar-pago" style="margin-top:10px;">Agregar pago</button>
+      </div>
+      <table class="tabla" style="margin-top:14px;">
+        <thead><tr><th>Fecha</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-pagos-cotizacion"></tbody>
+      </table>
+      <div class="totales-cotizacion">Saldo pendiente: $<strong id="cotizacion-saldo">0.00</strong></div>
+    </div>
+    <div class="vista-pestana" id="pestana-seguimiento" style="display:none;">
+      <div class="form-grid"><div class="campo" style="grid-column:1/-1;"><label>Nueva nota de seguimiento</label><textarea id="seguimiento-texto"></textarea></div></div>
+      <button type="button" class="btn pequeno solo-staff" id="btn-agregar-seguimiento" style="margin-top:8px;">Agregar al seguimiento</button>
+      <ul class="linea-tiempo" id="lista-seguimiento" style="margin-top:16px;"></ul>
+    </div>
+    <div class="vista-pestana" id="pestana-archivos" style="display:none;">
+      <div class="panel" style="box-shadow:none; border:1px solid var(--border);">
+        <h3>Subir evidencia</h3>
+        <div class="form-grid">
+          <div class="campo"><label>Tipo</label>
+            <select id="archivo-tipo"><option value="recepcion">Recepción</option><option value="proceso">Proceso</option><option value="entrega">Entrega</option><option value="comprobante">Comprobante</option><option value="otro">Otro</option></select>
+          </div>
+          <div class="campo"><label>Archivo (foto o documento)</label><input type="file" id="archivo-input" accept="image/*,.pdf"></div>
+        </div>
+        <button type="button" class="btn pequeno solo-staff" id="btn-subir-archivo" style="margin-top:10px;">Subir archivo</button>
+        <div id="mensaje-archivo" style="margin-top:8px;"></div>
+      </div>
+      <div id="galeria-archivos" style="margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px;"></div>
+    </div>
+  </div>
+</div>
+<!-- ======================= MODAL: EDITAR PERFIL USUARIO ======================= -->
+<div class="modal-fondo" id="modal-usuario">
+  <div class="modal" style="max-width:540px;">
+    <button class="cerrar" data-cerrar-modal="modal-usuario">×</button>
+    <h3 id="titulo-modal-usuario">Editar perfil de usuario</h3>
+    <div class="campo" style="margin-bottom:12px;"><label>Correo (solo lectura — se gestiona en Supabase)</label><input id="usuario-correo-display" readonly style="background:#f4f6f8; color:var(--text-mute);"></div>
+    <div class="form-grid dos">
+      <div class="campo"><label>Nombre completo *</label><input id="usuario-nombre" placeholder="Ej. Ernesto Castillo Colin"></div>
+      <div class="campo">
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — para iniciar sesión</span></label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="usuario-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
+          <button type="button" class="btn secundario pequeno" id="btn-generar-username" title="Generar desde el nombre">✦ Generar</button>
+        </div>
+        <div id="username-disponibilidad" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
+      </div>
+    </div>
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo"><label>Rol *</label>
+        <select id="usuario-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="tecnico">Técnico</option><option value="administrador">Administrador / Gerente</option></select>
+      </div>
+      <div class="campo"><label>Estado</label>
+        <select id="usuario-activo"><option value="true">Activo</option><option value="false">Inactivo (acceso bloqueado)</option></select>
+      </div>
+    </div>
+    <input type="hidden" id="usuario-id">
+    <!-- V7 · Restablecer contraseña -->
+    <div class="campo" style="margin-top:14px;">
+      <label>Nueva contraseña <span style="font-weight:400; color:var(--text-mute);">— déjala vacía si no la vas a cambiar</span></label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input id="usuario-password" placeholder="mínimo 6 caracteres" style="flex:1;">
+        <button type="button" class="btn secundario pequeno" id="btn-reset-password">Restablecer</button>
+      </div>
+    </div>
+    <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center;">
+      <button type="button" class="btn peligro" id="btn-eliminar-usuario">Eliminar usuario</button>
+      <div>
+        <button type="button" class="btn secundario" data-cerrar-modal="modal-usuario">Cancelar</button>
+        <button type="button" class="btn" id="btn-guardar-usuario">Guardar perfil</button>
+      </div>
+    </div>
+    <div id="mensaje-usuario"></div>
+  </div>
+</div>
+<!-- ======================= MODAL: CREAR USUARIO ======================= -->
+<div class="modal-fondo" id="modal-crear-usuario">
+  <div class="modal" style="max-width:560px;">
+    <button class="cerrar" data-cerrar-modal="modal-crear-usuario">×</button>
+    <h3>Crear usuario nuevo</h3>
+    <p style="color:var(--text-mute); font-size:13px; margin-top:-6px;">El usuario podrá iniciar sesión con su <strong>usuario</strong> o su correo.</p>
+    <div class="form-grid dos">
+      <div class="campo"><label>Nombre completo *</label><input id="nuevo-nombre" placeholder="Ej. Eder Castillo Colín"></div>
+      <div class="campo">
+        <label>Nombre de usuario *<span style="font-weight:400; color:var(--text-mute);"> — para entrar</span></label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="nuevo-username" placeholder="ecastillo" style="flex:1; text-transform:lowercase;">
+          <button type="button" class="btn secundario pequeno" id="btn-generar-nuevo-username" title="Generar desde el nombre">✦ Generar</button>
+        </div>
+        <div id="nuevo-username-estado" style="font-size:11px; margin-top:3px; min-height:14px;"></div>
+      </div>
+    </div>
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo"><label>Correo *</label><input type="email" id="nuevo-correo" placeholder="correo@ejemplo.com"></div>
+      <div class="campo"><label>Contraseña temporal *</label><input id="nuevo-password" placeholder="mínimo 6 caracteres"></div>
+    </div>
+    <div class="form-grid dos" style="margin-top:12px;">
+      <div class="campo"><label>Rol *</label>
+        <select id="nuevo-rol"><option value="consulta">Consulta (solo lectura)</option><option value="recepcion">Recepción / Asesor</option><option value="tecnico">Técnico</option><option value="administrador">Administrador / Gerente</option></select>
+      </div>
+    </div>
+    <div style="margin-top:18px; text-align:right;">
+      <button type="button" class="btn secundario" data-cerrar-modal="modal-crear-usuario">Cancelar</button>
+      <button type="button" class="btn" id="btn-confirmar-crear-usuario">Crear usuario</button>
+    </div>
+    <div id="mensaje-crear-usuario"></div>
+  </div>
+</div>
+<!-- ======================= MODAL: HISTORIAL ======================= -->
+<div class="modal-fondo" id="modal-historial">
+  <div class="modal" style="max-width:840px;">
+    <button class="cerrar" data-cerrar-modal="modal-historial">×</button>
+    <h3 id="titulo-historial">Historial del vehículo</h3>
+    <p id="subtitulo-historial" style="color:var(--text-mute); font-size:13px; margin-top:-8px;"></p>
+    <div class="kpis" id="kpis-historial" style="margin-bottom:16px;">
+      <div class="kpi"><div class="valor">—</div><div class="etiqueta">Visitas totales</div></div>
+      <div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">Total facturado histórico</div></div>
+      <div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Saldo pendiente acumulado</div></div>
+    </div>
+    <h3>Cotizaciones</h3>
+    <table class="tabla">
+      <thead><tr><th>Folio</th><th>Fecha</th><th>Km</th><th>Total</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="tabla-historial-cotizaciones"></tbody>
+    </table>
+    <h3 style="margin-top:18px;">Historial de placas</h3>
+    <ul class="linea-tiempo" id="lista-historial-placas"></ul>
+    <h3 style="margin-top:18px;">Línea de tiempo (todas las visitas)</h3>
+    <ul class="linea-tiempo" id="lista-historial-seguimiento"></ul>
+  </div>
+</div>
+<!-- ======================= MODAL: CREAR COMBO (V8) ======================= -->
+<div class="modal-fondo" id="modal-combo">
+  <div class="modal" style="max-width:720px;">
+    <button class="cerrar" data-cerrar-modal="modal-combo">×</button>
+    <h3>Crear combo / paquete</h3>
+    <div class="campo"><label>Nombre del combo *</label><input id="combo-nombre" placeholder="Ej. Afinación mayor"></div>
+    <div class="bloque-inline" style="margin-top:14px;">
+      <div class="bloque-titulo"><span>Agregar conceptos al combo</span></div>
+      <div class="form-grid">
+        <div class="campo"><label>Categoría</label><select id="combo-cat"><option value="">Selecciona…</option></select></div>
+        <div class="campo"><label>Concepto</label><select id="combo-concepto"><option value="">Primero elige categoría…</option></select></div>
+        <div class="campo"><label>Cantidad</label><input type="number" step="1" min="1" id="combo-cantidad" value="1"></div>
+      </div>
+      <button type="button" class="btn secundario pequeno" id="btn-combo-add-item" style="margin-top:8px;">+ Añadir al combo</button>
+    </div>
+    <table class="tabla" style="margin-top:12px;">
+      <thead><tr><th>Concepto</th><th>Tipo</th><th>Cantidad</th><th></th></tr></thead>
+      <tbody id="combo-lista-items"><tr><td colspan="4" class="vacio-tabla">Aún no agregas conceptos.</td></tr></tbody>
+    </table>
+    <div style="margin-top:16px; text-align:right;">
+      <button type="button" class="btn secundario" data-cerrar-modal="modal-combo">Cancelar</button>
+      <button type="button" class="btn" id="btn-guardar-combo">Guardar combo</button>
+    </div>
+    <div id="mensaje-combo"></div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<div class="modal-fondo" id="modal-v9-orden"><div class="modal" style="max-width:850px"><button class="cerrar" data-cerrar-modal="modal-v9-orden">×</button><h3 id="v9-ot-titulo">Orden de trabajo</h3><div id="v9-ot-resumen"></div><div class="campo" id="v9-ot-asignacion"><label>Técnico</label><select id="v9-ot-tecnico"></select></div><h3 style="margin-top:16px">Trabajos</h3><div id="v9-ot-trabajos"></div><div class="campo"><label>Observaciones</label><textarea id="v9-ot-observaciones"></textarea></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn secundario" id="v9-imprimir-ot">Imprimir</button><button class="btn" id="v9-guardar-ot">Guardar avance</button><button class="btn" id="v9-finalizar-ot">Finalizar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-adicional"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-adicional">×</button><h3>Agregar adicional pendiente</h3><div class="form-grid"><div class="campo"><label>Descripción</label><input id="v9-ad-desc"></div><div class="campo"><label>Cantidad</label><input id="v9-ad-cant" type="number" min="1" step="1" value="1"></div><div class="campo"><label>Precio unitario</label><input id="v9-ad-precio" type="number" min="0" step="1"></div></div><div class="campo"><label>Observación</label><textarea id="v9-ad-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-guardar-adicional">Guardar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-herr"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-herr">×</button><h3>Nueva herramienta</h3><div class="form-grid"><div class="campo"><label>Identificador</label><input id="v9-herr-codigo"></div><div class="campo"><label>Nombre</label><input id="v9-herr-nombre"></div></div><div class="campo"><label>Observaciones</label><textarea id="v9-herr-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-guardar-herr">Guardar</button></div></div></div>
+<div class="modal-fondo" id="modal-v9-prestamo"><div class="modal"><button class="cerrar" data-cerrar-modal="modal-v9-prestamo">×</button><h3>Préstamo de herramienta</h3><input type="hidden" id="v9-prestamo-id"><div class="campo"><label>Técnico</label><select id="v9-prestamo-tecnico"></select></div><div class="campo"><label>Orden relacionada (opcional)</label><select id="v9-prestamo-ot"></select></div><div class="campo"><label>Observaciones</label><textarea id="v9-prestamo-obs"></textarea></div><div style="text-align:right;margin-top:12px"><button class="btn" id="v9-confirmar-prestamo">Prestar</button></div></div></div>
+
+<script src="assets/v9.js"></script>
+</body>
+</html>
