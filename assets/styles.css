@@ -164,6 +164,10 @@ a { color:var(--teal); }
   .form-grid, .form-grid.dos { grid-template-columns:1fr; }
 }
 
+E/* V11 - Herramienta especial */
+.v11-tabla-scroll{overflow-x:auto}.v11-tabla-scroll .tabla{min-width:1080px}.v11-acciones{white-space:nowrap}.v11-acciones .btn{margin:2px 0}.v11-tabla-scroll .panel{box-shadow:none}.v11-tabla-scroll td{vertical-align:top}
+
+
 /* V9 */
 .v9-descuento{display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin:6px 0}.v9-descuento input[type=radio]{width:auto}.v9-descuento input[type=number]{width:100px}.v9-check{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--border)}.v9-check input{width:20px;height:20px}.v9-progreso{height:8px;background:#e6ebef;border-radius:20px;overflow:hidden}.v9-progreso span{display:block;height:100%;background:var(--teal)}.v9-adicional{padding:10px;border:1px solid var(--border);border-radius:8px;margin:8px 0}.v9-lock{background:#f4f6f8!important;opacity:.75}.badge.morado{background:#f0e9f7;color:#70459e;border-color:#d8c5eb}
 /* V9.1.3 - Orden de trabajo / Checklist */
