@@ -854,48 +854,284 @@ el("btn-pdf-cotizacion")?.addEventListener("click", async () => {
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de generar el PDF.", "error"); return; }
   await generarPDFCotizacion(id);
 });
+// ============================================================================
+// PDF de cotización · estilo "SPEED CENTER"
+// Reemplaza COMPLETA tu función generarPDFCotizacion(cotizacionId) en app.js
+// ============================================================================
 async function generarPDFCotizacion(cotizacionId) {
-  const { data: c } = await sb.from("cotizaciones").select("*, clientes(nombre_completo, telefono, correo), vehiculos(placa, marca, modelo, anio, vin)").eq("id", cotizacionId).single();
+
+  // ==========================================================================
+  // ZONA EDITABLE · Datos de la empresa, IVA y términos
+  // ==========================================================================
+  const EMPRESA = {
+    nombre: "SPEED CENTER",
+    direccion: "Cda. de Uniroyal 4, La Michoacana, 52166 San Jorge Pueblo Nuevo, México.",
+    telefono: "Teléfono 722 687 6487",
+    logo: "assets/logo.png",     // sube tu logo aquí; si no existe, se omite
+    iva: 0.16,                   // 16%
+    ivaIncluidoEnTotal: true     // true = el total guardado YA incluye IVA
+  };
+
+  const TERMINOS = [
+    "El tiempo de entrega del automóvil, dependerá del servicio solicitado.",
+    "Las refacciones y los costos se basan en la disponibilidad actual. (Piezas nuevas garantizadas, en caso de ser originales se mencionan en la cotización).",
+    "Esta cotización tiene validez de 7 días, desde el momento de su expedición; posterior a este tiempo, necesita solicitar una nueva cotización.",
+    "La cotización se realizó en base a las necesidades y observaciones del cliente, de ser necesario algún cambio, puede ser susceptible a una recotización.",
+    "Cualquier cancelación debe realizarse 12 horas antes, de lo contrario el importe liquidado o como anticipo no se tomará a cuenta como saldo a favor.",
+    "La empresa presentará un presupuesto de costo por escrito y en caso de ser aprobado por el cliente, se solicita pagar el 100% las refacciones, así como el 50% de mano de obra, para comenzar a realizar el trabajo.",
+    "El pago se hará mediante pago en efectivo, transferencia de fondos o depósito bancario; en este último, el depósito deberá incluir como referencia el No. de factura que le da lugar, ya sea anticipo, pago final, o pago total.",
+    "Cualquier anomalía o desperfecto del vehículo deberá ser notificado por el cliente a más tardar 5 horas después de haber sido entregado, pasando ese tiempo la EMPRESA no podrá hacer el cambio de refacciones o hacer un nuevo servicio.",
+    "Para elaborar el diagnóstico del vehículo, el cliente autoriza desarmar las partes indispensables del mismo y sus componentes, a efecto de obtener un diagnóstico adecuado, en el entendido de que el vehículo se devolverá en las mismas condiciones en que fuera entregado, excepto en caso de que como consecuencia inevitable resulte imposible o ineficaz para su funcionamiento el entregarlo, por causa no imputable al proveedor. En todo caso, se obliga a pagar el importe del diagnóstico y los trabajos necesarios para realizarlo, en caso de no autorizar la reparación.",
+    "Una vez notificado al cliente que el servicio ha sido terminado, cuenta con 3 días hábiles para recoger su vehículo y liquidar el servicio; de no ser así, se cobrará una pensión de $50.00 por día.",
+    "ES NECESARIO LIQUIDAR AL 100% EL SERVICIO, PARA SER ENTREGADO EL VEHÍCULO." // 11 en negritas
+  ];
+
+  // ==========================================================================
+  // Datos de la cotización
+  // ==========================================================================
+  const { data: c } = await sb
+    .from("cotizaciones")
+    .select("*, clientes(nombre_completo, telefono, correo, rfc), vehiculos(placa, marca, modelo, anio, vin)")
+    .eq("id", cotizacionId)
+    .single();
+
   if (!c) { alert("No se encontró la cotización."); return; }
-  const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
-  const { data: pagos } = await sb.from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado","valido");
-  const pagado = (pagos||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0);
-  const saldo = Math.max(0, fixFloat(Number(c.total||0) - pagado));
+
+  const { data: detalle } = await sb
+    .from("detalle_cotizacion")
+    .select("*")
+    .eq("cotizacion_id", cotizacionId)
+    .order("created_at");
+
+  const { data: pagos } = await sb
+    .from("pagos")
+    .select("*")
+    .eq("cotizacion_id", cotizacionId)
+    .eq("estado", "valido");
+
+  const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
+
+  // ==========================================================================
+  // Cálculo de importes
+  // ==========================================================================
+  const totalGuardado = Number(c.total || 0);
+  let base, ivaMonto, importeTotal;
+
+  if (EMPRESA.ivaIncluidoEnTotal) {
+    importeTotal = totalGuardado;
+    base = importeTotal / (1 + EMPRESA.iva);
+    ivaMonto = importeTotal - base;
+  } else {
+    base = totalGuardado;
+    ivaMonto = base * EMPRESA.iva;
+    importeTotal = base + ivaMonto;
+  }
+
+  const anticipoRequerido = Math.max(0, importeTotal - pagado);
+
+  // ==========================================================================
+  // Documento
+  // ==========================================================================
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit:"pt", format:"letter" });
-  const navy=[15,42,74], teal=[27,111,122], gris=[90,100,110];
-  doc.setFillColor(...navy); doc.rect(0,0,612,70,"F");
-  doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont(undefined,"bold"); doc.text("Taller Automotriz",40,30);
-  doc.setFontSize(10); doc.setFont(undefined,"normal"); doc.text("Cotización de servicio",40,46);
-  doc.setFontSize(12); doc.setFont(undefined,"bold"); doc.text(c.folio,572,30,{align:"right"});
-  doc.setFontSize(9); doc.setFont(undefined,"normal"); doc.text("Fecha: "+(c.fecha||""),572,46,{align:"right"});
-  let y=95; doc.setTextColor(...navy); doc.setFontSize(11); doc.setFont(undefined,"bold");
-  doc.text("Cliente",40,y); doc.text("Vehículo",320,y);
-  doc.setFont(undefined,"normal"); doc.setFontSize(9.5); doc.setTextColor(30,30,30); y+=16;
-  doc.text(c.clientes?c.clientes.nombre_completo:"—",40,y);
-  doc.text(c.vehiculos?`${c.vehiculos.marca} ${c.vehiculos.modelo} ${c.vehiculos.anio||""}`:"—",320,y); y+=14;
-  doc.text(c.clientes&&c.clientes.telefono?"Tel: "+c.clientes.telefono:"",40,y);
-  doc.text(c.vehiculos?"Placa: "+c.vehiculos.placa:"",320,y); y+=14;
-  doc.text(c.clientes&&c.clientes.correo?c.clientes.correo:"",40,y);
-  doc.text(c.vehiculos&&c.vehiculos.vin?"VIN: "+c.vehiculos.vin:"",320,y); y+=28;
-  const filas = (detalle||[]).map(d => [d.descripcion, String(d.cantidad), "$"+money(d.precio_unitario), d.descuento?"$"+money(d.descuento):"—", "$"+money(d.importe)]);
-  doc.autoTable({ startY:y, head:[["Concepto","Cant.","P. Unitario","Descuento","Importe"]], body:filas, theme:"striped", headStyles:{fillColor:teal,textColor:255,fontSize:9}, styles:{fontSize:9,textColor:[30,30,30]}, columnStyles:{1:{halign:"center"},2:{halign:"right"},3:{halign:"right"},4:{halign:"right"}}, margin:{left:40,right:40} });
-  let yF = doc.lastAutoTable.finalY + 16;
-  doc.setFontSize(9.5); doc.setTextColor(...gris);
-  doc.text("Subtotal:",420,yF); doc.text("$"+money(c.subtotal),572,yF,{align:"right"}); yF+=14;
-  doc.text("Descuento:",420,yF); doc.text("$"+money(c.descuento_total),572,yF,{align:"right"}); yF+=16;
-  doc.setDrawColor(...navy); doc.line(420,yF-10,572,yF-10);
-  doc.setFontSize(12); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text("Total:",420,yF); doc.text("$"+money(c.total),572,yF,{align:"right"}); yF+=16;
-  doc.setFontSize(9.5); doc.setFont(undefined,"normal"); doc.setTextColor(...gris);
-  doc.text("Pagado:",420,yF); doc.text("$"+money(pagado),572,yF,{align:"right"}); yF+=14;
-  doc.setFont(undefined,"bold"); doc.setTextColor(saldo>0?192:47, saldo>0?57:143, saldo>0?43:95);
-  doc.text("Saldo pendiente:",420,yF); doc.text("$"+money(saldo),572,yF,{align:"right"});
-  if (c.observaciones) { yF+=30; doc.setFontSize(10); doc.setFont(undefined,"bold"); doc.setTextColor(...navy); doc.text("Observaciones",40,yF); yF+=14; doc.setFont(undefined,"normal"); doc.setFontSize(9); doc.setTextColor(30,30,30); const ln=doc.splitTextToSize(c.observaciones,530); doc.text(ln,40,yF); yF+=ln.length*11; }
-  yF+=26; doc.setFontSize(8); doc.setTextColor(...gris);
-  doc.text(doc.splitTextToSize("Precios sujetos a cambio sin previo aviso hasta su autorización. La entrega del vehículo está condicionada a la liquidación del saldo pendiente, salvo autorización expresa de cierre con adeudo.",530),40,yF);
-  doc.save(`${c.folio}.pdf`);
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+
+  const GRIS = [77, 77, 77];
+  const NEGRO = [30, 30, 30];
+  const ROJO = [200, 20, 20];
+  const LINEA = [180, 180, 180];
+  const PW = 612;
+  const M = 40;
+
+  const dinero = n =>
+    "$ " + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // --- Logo (opcional) -----------------------------------------------------
+  async function cargarLogo(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const cv = document.createElement("canvas");
+          cv.width = img.naturalWidth;
+          cv.height = img.naturalHeight;
+          cv.getContext("2d").drawImage(img, 0, 0);
+          resolve({ data: cv.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight });
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  const logo = await cargarLogo(EMPRESA.logo);
+  let y = M;
+
+  if (logo) {
+    const lw = 130;
+    const lh = (logo.h / logo.w) * lw;
+    doc.addImage(logo.data, "PNG", M, y, lw, Math.min(lh, 40));
+  }
+
+  // --- Encabezado empresa (derecha) ---------------------------------------
+  doc.setTextColor(...ROJO);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(13);
+  doc.text(EMPRESA.nombre, PW - M, y + 8, { align: "right" });
+
+  doc.setTextColor(...NEGRO);
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(8);
+  doc.text(EMPRESA.direccion, PW - M, y + 22, { align: "right" });
+  doc.text(EMPRESA.telefono, PW - M, y + 33, { align: "right" });
+
+  y += 55;
+
+  // --- Bloque de datos del cliente ----------------------------------------
+  function celdaHeader(x, w, h, txt) {
+    doc.setFillColor(...GRIS);
+    doc.rect(x, y, w, h, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(undefined, "bold");
+    doc.setFontSize(7.5);
+    doc.text(txt, x + w / 2, y + h / 2 + 2.5, { align: "center" });
+  }
+  function celdaValor(x, w, h, txt, opt = {}) {
+    doc.setDrawColor(...LINEA);
+    doc.rect(x, y, w, h);
+    doc.setTextColor(...(opt.color || NEGRO));
+    doc.setFont(undefined, opt.bold ? "bold" : "normal");
+    doc.setFontSize(opt.size || 9);
+    doc.text(txt || "—", x + w / 2, y + h / 2 + 3, { align: "center" });
+  }
+
+  const H = 16;
+  const col1 = 300, col2 = 190, col3 = (PW - 2 * M) - col1 - col2;
+  const x1 = M, x2 = x1 + col1, x3 = x2 + col2;
+
+  // Fila títulos
+  celdaHeader(x1, col1, H, "NOMBRE DEL CLIENTE");
+  celdaHeader(x2, col2, H, "FECHA");
+  celdaHeader(x3, col3, H, "COTIZACIÓN NO.");
+  y += H;
+
+  // Fila valores (la 3a celda se combina para 2 filas con el folio en rojo)
+  const fecha = (c.fecha || "").toString();
+  celdaValor(x1, col1, H, (c.clientes?.nombre_completo || "—").toUpperCase());
+  celdaValor(x2, col2, H, fecha.toUpperCase());
+  doc.setDrawColor(...LINEA);
+  doc.rect(x3, y, col3, H * 3);
+  doc.setTextColor(...ROJO);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(16);
+  doc.text(String(c.folio || ""), x3 + col3 / 2, y + (H * 3) / 2 + 5, { align: "center" });
+  y += H;
+
+  // Fila títulos placas / auto
+  celdaHeader(x1, col1, H, "PLACAS");
+  celdaHeader(x2, col2, H, "AUTOMÓVIL");
+  y += H;
+
+  // Fila valores placas / auto
+  const auto = [c.vehiculos?.marca, c.vehiculos?.modelo].filter(Boolean).join(" - ").toUpperCase();
+  celdaValor(x1, col1, H, (c.vehiculos?.placa || "—").toUpperCase());
+  celdaValor(x2, col2, H, auto || "—");
+  y += H;
+
+  // Barra comentarios
+  celdaHeader(M, PW - 2 * M, H, "COMENTARIOS");
+  y += H + 8;
+
+  // --- Tabla de conceptos --------------------------------------------------
+  const body = (detalle || []).map(d => [
+    String(d.cantidad || 1),
+    d.descripcion || "",
+    dinero(d.precio_unitario),
+    dinero(d.importe)
+  ]);
+
+  doc.autoTable({
+    startY: y,
+    head: [["CANTIDAD", "DESCRIPCIÓN DEL ARTÍCULO", "IMPORTE UNITARIO", "TOTAL"]],
+    body: body.length ? body : [["", "", "", ""]],
+    theme: "grid",
+    headStyles: { fillColor: GRIS, textColor: 255, fontSize: 8, halign: "center" },
+    styles: { fontSize: 8.5, textColor: NEGRO, cellPadding: 4, lineColor: LINEA },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 70 },
+      1: { halign: "left" },
+      2: { halign: "right", cellWidth: 110 },
+      3: { halign: "right", cellWidth: 110 }
+    },
+    margin: { left: M, right: M }
+  });
+
+  y = doc.lastAutoTable.finalY + 12;
+
+  // --- Bloques de totales (izquierda y derecha) ---------------------------
+  const bh = 18;
+  const etW = 120, valW = 150;
+  const izqX = M;
+  const derX = PW - M - etW - valW;
+
+  function filaTotal(x, etiqueta, valor, opt = {}) {
+    // etiqueta (negra)
+    doc.setFillColor(...(opt.fill || [0, 0, 0]));
+    doc.rect(x, y, etW, bh, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(undefined, "bold");
+    doc.setFontSize(8.5);
+    doc.text(etiqueta, x + 6, y + bh / 2 + 3);
+    // valor
+    doc.setDrawColor(...LINEA);
+    doc.rect(x + etW, y, valW, bh);
+    doc.setTextColor(...(opt.color || NEGRO));
+    doc.setFont(undefined, opt.bold ? "bold" : "normal");
+    doc.setFontSize(9);
+    doc.text(valor, x + etW + valW - 6, y + bh / 2 + 3, { align: "right" });
+  }
+
+  const yTot = y;
+
+  // Izquierda
+  filaTotal(izqX, "SUBTOTAL:", dinero(base));
+  y += bh;
+  filaTotal(izqX, `IVA (${Math.round(EMPRESA.iva * 100)}%):`, dinero(ivaMonto));
+  y += bh;
+  filaTotal(izqX, "ANTICIPO:", dinero(pagado));
+
+  // Derecha (alineada con las 2 primeras de la izquierda)
+  y = yTot;
+  filaTotal(derX, "IMPORTE TOTAL:", dinero(importeTotal), { color: ROJO, bold: true });
+  y += bh;
+  filaTotal(derX, "ANTICIPO REQUERIDO:", dinero(anticipoRequerido), { color: ROJO, bold: true });
+
+  y = yTot + bh * 3 + 16;
+
+  // --- Términos y condiciones ---------------------------------------------
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...NEGRO);
+  doc.text("TÉRMINOS Y CONDICIONES", PW / 2, y, { align: "center" });
+  y += 14;
+
+  doc.setFontSize(7);
+  const anchoTxt = PW - 2 * M - 14;
+
+  TERMINOS.forEach((t, i) => {
+    const num = (i + 1) + ". ";
+    const esUltimo = i === TERMINOS.length - 1;
+    doc.setFont(undefined, esUltimo ? "bold" : "normal");
+    const lineas = doc.splitTextToSize(num + t, anchoTxt);
+    if (y + lineas.length * 8 > 760) { doc.addPage(); y = M; }
+    doc.text(lineas, M + 4, y);
+    y += lineas.length * 8 + 2;
+  });
+
+  // --- Guardar -------------------------------------------------------------
+  doc.save(`${c.folio || "cotizacion"}.pdf`);
 }
+
 
 // ============================================================================
 // USUARIOS
