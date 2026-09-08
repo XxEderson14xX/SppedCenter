@@ -33,6 +33,39 @@ function abrirModal(id) { el(id)?.classList.add("activo"); }
 function cerrarModal(id) { el(id)?.classList.remove("activo"); }
 function puedeEscribir() { return !!(estado.perfil && estado.perfil.rol !== "consulta"); }
 function esAdmin() { return !!(estado.perfil && estado.perfil.rol === "administrador"); }
+// === V11.2: ¿el rol puede operar (crear/editar cotización y pagos)? ===
+// Solo recepción y administrador. Consulta y técnico = solo lectura.
+function puedeOperarCotizacion() {
+  const rol = estado?.perfil?.rol;
+  return rol === "administrador" || rol === "recepcion";
+}
+function aplicarPermisosCotizacion() {
+  const puede = puedeOperarCotizacion();
+
+  // Botón "+ Nueva cotización"
+  const btnNueva = el("btn-nueva-cotizacion");
+  if (btnNueva) btnNueva.style.display = puede ? "" : "none";
+
+  // Pestaña "Pagos" (se oculta para quien no puede operar)
+  const tabPagos = document.querySelector('.pestana[data-pestana="pagos"]');
+  if (tabPagos) tabPagos.style.display = puede ? "" : "none";
+
+  // Dentro del modal de cotización: botones de acción
+  ["btn-guardar-cotizacion","btn-agregar-concepto","btn-cat-agregar",
+   "btn-agregar-pago","btn-agregar-seguimiento","btn-subir-archivo",
+   "btn-v9-ot","btn-v9-adicional"
+  ].forEach(id => { const e = el(id); if (e) e.style.display = puede ? "" : "none"; });
+
+  // Campos de conceptos y captura (solo lectura si no puede)
+  document.querySelectorAll('#cuerpo-conceptos [data-campo], #cuerpo-conceptos [data-quitar]')
+    .forEach(e => { if (!puede) { e.disabled = true; e.style.pointerEvents = "none"; } });
+
+  // Si por alguna razón está en la pestaña Pagos y no puede, lo mandamos a Datos
+  if (!puede) {
+    const tabPagosActiva = document.querySelector('.pestana[data-pestana="pagos"].activa');
+    if (tabPagosActiva) document.querySelector('.pestana[data-pestana="datos"]')?.click();
+  }
+}
 // === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
 const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
 function cotizacionBloqueada() {
@@ -656,6 +689,7 @@ async function abrirCotizacion(id) {
   cargarCategoriasCotizacion();
   actualizarGatePagos();
   aplicarBloqueoDatosCotizacion();
+  aplicarPermisosCotizacion();
   await cargarTecnicoAsignado(id);
   abrirModal("modal-cotizacion");
 }
