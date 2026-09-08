@@ -1,7 +1,9 @@
+cat > /mnt/user-data/outputs/app.js <<'ARCHIVO'
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V10.1
+// Sistema Taller Automotriz · app.js · Versión V11.1
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
-// + V8 (cascada de catálogo maestro en la cotización + creación de combos).
+// + V8 (cascada de catálogo maestro + combos) + V10 (Catálogo Maestro)
+// + V11.1 (PDF estilo Speed Center: folio auto-ajuste, totales separados, anticipo 50%)
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -638,7 +640,6 @@ function renderConceptos() {
   recalcularTotales();
 }
 
-// Delegación de eventos para evitar memory leaks
 el("cuerpo-conceptos")?.addEventListener("input", (e) => {
   const input = e.target;
   if (!input.dataset.campo) return;
@@ -854,22 +855,20 @@ el("btn-pdf-cotizacion")?.addEventListener("click", async () => {
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de generar el PDF.", "error"); return; }
   await generarPDFCotizacion(id);
 });
+
 // ============================================================================
 // PDF de cotización · estilo "SPEED CENTER"
-// Reemplaza COMPLETA tu función generarPDFCotizacion(cotizacionId) en app.js
 // ============================================================================
 async function generarPDFCotizacion(cotizacionId) {
 
-  // ==========================================================================
-  // ZONA EDITABLE · Datos de la empresa, IVA y términos
-  // ==========================================================================
   const EMPRESA = {
     nombre: "SPEED CENTER",
     direccion: "Cda. de Uniroyal 4, La Michoacana, 52166 San Jorge Pueblo Nuevo, México.",
     telefono: "Teléfono 722 687 6487",
-    logo: "assets/logo.png",     // sube tu logo aquí; si no existe, se omite
-    iva: 0.16,                   // 16%
-    ivaIncluidoEnTotal: true     // true = el total guardado YA incluye IVA
+    logo: "assets/logo.png",
+    iva: 0.16,
+    ivaIncluidoEnTotal: true,
+    porcentajeAnticipo: 0.50   // ANTICIPO REQUERIDO = 50% del importe total
   };
 
   const TERMINOS = [
@@ -883,40 +882,26 @@ async function generarPDFCotizacion(cotizacionId) {
     "Cualquier anomalía o desperfecto del vehículo deberá ser notificado por el cliente a más tardar 5 horas después de haber sido entregado, pasando ese tiempo la EMPRESA no podrá hacer el cambio de refacciones o hacer un nuevo servicio.",
     "Para elaborar el diagnóstico del vehículo, el cliente autoriza desarmar las partes indispensables del mismo y sus componentes, a efecto de obtener un diagnóstico adecuado, en el entendido de que el vehículo se devolverá en las mismas condiciones en que fuera entregado, excepto en caso de que como consecuencia inevitable resulte imposible o ineficaz para su funcionamiento el entregarlo, por causa no imputable al proveedor. En todo caso, se obliga a pagar el importe del diagnóstico y los trabajos necesarios para realizarlo, en caso de no autorizar la reparación.",
     "Una vez notificado al cliente que el servicio ha sido terminado, cuenta con 3 días hábiles para recoger su vehículo y liquidar el servicio; de no ser así, se cobrará una pensión de $50.00 por día.",
-    "ES NECESARIO LIQUIDAR AL 100% EL SERVICIO, PARA SER ENTREGADO EL VEHÍCULO." // 11 en negritas
+    "ES NECESARIO LIQUIDAR AL 100% EL SERVICIO, PARA SER ENTREGADO EL VEHÍCULO."
   ];
 
-  // ==========================================================================
-  // Datos de la cotización
-  // ==========================================================================
   const { data: c } = await sb
     .from("cotizaciones")
     .select("*, clientes(nombre_completo, telefono, correo, rfc), vehiculos(placa, marca, modelo, anio, vin)")
     .eq("id", cotizacionId)
     .single();
-
   if (!c) { alert("No se encontró la cotización."); return; }
 
   const { data: detalle } = await sb
-    .from("detalle_cotizacion")
-    .select("*")
-    .eq("cotizacion_id", cotizacionId)
-    .order("created_at");
+    .from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
 
   const { data: pagos } = await sb
-    .from("pagos")
-    .select("*")
-    .eq("cotizacion_id", cotizacionId)
-    .eq("estado", "valido");
+    .from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado", "valido");
 
   const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
 
-  // ==========================================================================
-  // Cálculo de importes
-  // ==========================================================================
   const totalGuardado = Number(c.total || 0);
   let base, ivaMonto, importeTotal;
-
   if (EMPRESA.ivaIncluidoEnTotal) {
     importeTotal = totalGuardado;
     base = importeTotal / (1 + EMPRESA.iva);
@@ -926,12 +911,8 @@ async function generarPDFCotizacion(cotizacionId) {
     ivaMonto = base * EMPRESA.iva;
     importeTotal = base + ivaMonto;
   }
+  const anticipoRequerido = importeTotal * EMPRESA.porcentajeAnticipo;
 
-  const anticipoRequerido = Math.max(0, importeTotal - pagado);
-
-  // ==========================================================================
-  // Documento
-  // ==========================================================================
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
 
@@ -942,10 +923,8 @@ async function generarPDFCotizacion(cotizacionId) {
   const PW = 612;
   const M = 40;
 
-  const dinero = n =>
-    "$ " + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dinero = n => "$ " + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // --- Logo (opcional) -----------------------------------------------------
   async function cargarLogo(url) {
     return new Promise(resolve => {
       const img = new Image();
@@ -953,8 +932,7 @@ async function generarPDFCotizacion(cotizacionId) {
       img.onload = () => {
         try {
           const cv = document.createElement("canvas");
-          cv.width = img.naturalWidth;
-          cv.height = img.naturalHeight;
+          cv.width = img.naturalWidth; cv.height = img.naturalHeight;
           cv.getContext("2d").drawImage(img, 0, 0);
           resolve({ data: cv.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight });
         } catch (e) { resolve(null); }
@@ -966,84 +944,65 @@ async function generarPDFCotizacion(cotizacionId) {
 
   const logo = await cargarLogo(EMPRESA.logo);
   let y = M;
-
   if (logo) {
-    const lw = 130;
+    const lw = 150;
     const lh = (logo.h / logo.w) * lw;
-    doc.addImage(logo.data, "PNG", M, y, lw, Math.min(lh, 40));
+    doc.addImage(logo.data, "PNG", M, y, lw, Math.min(lh, 48));
   }
 
-  // --- Encabezado empresa (derecha) ---------------------------------------
-  doc.setTextColor(...ROJO);
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(13);
-  doc.text(EMPRESA.nombre, PW - M, y + 8, { align: "right" });
+  doc.setTextColor(...ROJO); doc.setFont(undefined, "bold"); doc.setFontSize(14);
+  doc.text(EMPRESA.nombre, PW - M, y + 10, { align: "right" });
+  doc.setTextColor(...NEGRO); doc.setFont(undefined, "normal"); doc.setFontSize(8);
+  doc.text(EMPRESA.direccion, PW - M, y + 24, { align: "right" });
+  doc.text(EMPRESA.telefono, PW - M, y + 35, { align: "right" });
+  y += 58;
 
-  doc.setTextColor(...NEGRO);
-  doc.setFont(undefined, "normal");
-  doc.setFontSize(8);
-  doc.text(EMPRESA.direccion, PW - M, y + 22, { align: "right" });
-  doc.text(EMPRESA.telefono, PW - M, y + 33, { align: "right" });
-
-  y += 55;
-
-  // --- Bloque de datos del cliente ----------------------------------------
   function celdaHeader(x, w, h, txt) {
-    doc.setFillColor(...GRIS);
-    doc.rect(x, y, w, h, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont(undefined, "bold");
-    doc.setFontSize(7.5);
+    doc.setFillColor(...GRIS); doc.rect(x, y, w, h, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont(undefined, "bold"); doc.setFontSize(7.5);
     doc.text(txt, x + w / 2, y + h / 2 + 2.5, { align: "center" });
   }
   function celdaValor(x, w, h, txt, opt = {}) {
-    doc.setDrawColor(...LINEA);
-    doc.rect(x, y, w, h);
-    doc.setTextColor(...(opt.color || NEGRO));
-    doc.setFont(undefined, opt.bold ? "bold" : "normal");
-    doc.setFontSize(opt.size || 9);
+    doc.setDrawColor(...LINEA); doc.rect(x, y, w, h);
+    doc.setTextColor(...(opt.color || NEGRO)); doc.setFont(undefined, opt.bold ? "bold" : "normal"); doc.setFontSize(opt.size || 9);
     doc.text(txt || "—", x + w / 2, y + h / 2 + 3, { align: "center" });
   }
 
   const H = 16;
-  const col1 = 300, col2 = 190, col3 = (PW - 2 * M) - col1 - col2;
+  const col1 = 270, col2 = 150, col3 = (PW - 2 * M) - col1 - col2;
   const x1 = M, x2 = x1 + col1, x3 = x2 + col2;
 
-  // Fila títulos
   celdaHeader(x1, col1, H, "NOMBRE DEL CLIENTE");
   celdaHeader(x2, col2, H, "FECHA");
   celdaHeader(x3, col3, H, "COTIZACIÓN NO.");
   y += H;
 
-  // Fila valores (la 3a celda se combina para 2 filas con el folio en rojo)
   const fecha = (c.fecha || "").toString();
   celdaValor(x1, col1, H, (c.clientes?.nombre_completo || "—").toUpperCase());
   celdaValor(x2, col2, H, fecha.toUpperCase());
-  doc.setDrawColor(...LINEA);
-  doc.rect(x3, y, col3, H * 3);
-  doc.setTextColor(...ROJO);
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(16);
-  doc.text(String(c.folio || ""), x3 + col3 / 2, y + (H * 3) / 2 + 5, { align: "center" });
+
+  doc.setDrawColor(...LINEA); doc.rect(x3, y, col3, H * 3);
+  doc.setTextColor(...ROJO); doc.setFont(undefined, "bold");
+  const folioTxt = String(c.folio || "");
+  let fsFolio = 14; doc.setFontSize(fsFolio);
+  const maxAnchoFolio = col3 - 10;
+  while (fsFolio > 6 && doc.getTextWidth(folioTxt) > maxAnchoFolio) { fsFolio -= 0.5; doc.setFontSize(fsFolio); }
+  doc.text(folioTxt, x3 + col3 / 2, y + (H * 3) / 2 + 5, { align: "center", maxWidth: maxAnchoFolio });
   y += H;
 
-  // Fila títulos placas / auto
   celdaHeader(x1, col1, H, "PLACAS");
   celdaHeader(x2, col2, H, "AUTOMÓVIL");
   y += H;
 
-  // Fila valores placas / auto
   const auto = [c.vehiculos?.marca, c.vehiculos?.modelo].filter(Boolean).join(" - ").toUpperCase();
   celdaValor(x1, col1, H, (c.vehiculos?.placa || "—").toUpperCase());
   celdaValor(x2, col2, H, auto || "—");
   y += H;
 
-  // Barra comentarios
   celdaHeader(M, PW - 2 * M, H, "COMENTARIOS");
   y += H + 8;
 
-  // --- Tabla de conceptos --------------------------------------------------
-  const body = (detalle || []).map(d => [
+  const bodyTabla = (detalle || []).map(d => [
     String(d.cantidad || 1),
     d.descripcion || "",
     dinero(d.precio_unitario),
@@ -1053,7 +1012,7 @@ async function generarPDFCotizacion(cotizacionId) {
   doc.autoTable({
     startY: y,
     head: [["CANTIDAD", "DESCRIPCIÓN DEL ARTÍCULO", "IMPORTE UNITARIO", "TOTAL"]],
-    body: body.length ? body : [["", "", "", ""]],
+    body: bodyTabla.length ? bodyTabla : [["", "", "", ""]],
     theme: "grid",
     headStyles: { fillColor: GRIS, textColor: 255, fontSize: 8, halign: "center" },
     styles: { fontSize: 8.5, textColor: NEGRO, cellPadding: 4, lineColor: LINEA },
@@ -1066,58 +1025,43 @@ async function generarPDFCotizacion(cotizacionId) {
     margin: { left: M, right: M }
   });
 
-  y = doc.lastAutoTable.finalY + 12;
+  y = doc.lastAutoTable.finalY + 14;
 
-  // --- Bloques de totales (izquierda y derecha) ---------------------------
   const bh = 18;
-  const etW = 120, valW = 150;
+  const etW = 105, valW = 120;
+  const bloqueW = etW + valW;
   const izqX = M;
-  const derX = PW - M - etW - valW;
+  const derX = PW - M - bloqueW;
 
   function filaTotal(x, etiqueta, valor, opt = {}) {
-    // etiqueta (negra)
-    doc.setFillColor(...(opt.fill || [0, 0, 0]));
-    doc.rect(x, y, etW, bh, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont(undefined, "bold");
-    doc.setFontSize(8.5);
+    doc.setFillColor(...(opt.fill || [0, 0, 0])); doc.rect(x, y, etW, bh, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont(undefined, "bold"); doc.setFontSize(8.5);
     doc.text(etiqueta, x + 6, y + bh / 2 + 3);
-    // valor
-    doc.setDrawColor(...LINEA);
-    doc.rect(x + etW, y, valW, bh);
-    doc.setTextColor(...(opt.color || NEGRO));
-    doc.setFont(undefined, opt.bold ? "bold" : "normal");
-    doc.setFontSize(9);
+    doc.setDrawColor(...LINEA); doc.rect(x + etW, y, valW, bh);
+    doc.setTextColor(...(opt.color || NEGRO)); doc.setFont(undefined, opt.bold ? "bold" : "normal"); doc.setFontSize(9);
     doc.text(valor, x + etW + valW - 6, y + bh / 2 + 3, { align: "right" });
   }
 
   const yTot = y;
-
-  // Izquierda
   filaTotal(izqX, "SUBTOTAL:", dinero(base));
   y += bh;
   filaTotal(izqX, `IVA (${Math.round(EMPRESA.iva * 100)}%):`, dinero(ivaMonto));
   y += bh;
   filaTotal(izqX, "ANTICIPO:", dinero(pagado));
 
-  // Derecha (alineada con las 2 primeras de la izquierda)
   y = yTot;
   filaTotal(derX, "IMPORTE TOTAL:", dinero(importeTotal), { color: ROJO, bold: true });
   y += bh;
-  filaTotal(derX, "ANTICIPO REQUERIDO:", dinero(anticipoRequerido), { color: ROJO, bold: true });
+  filaTotal(derX, "ANTICIPO REQ.:", dinero(anticipoRequerido), { color: ROJO, bold: true });
 
   y = yTot + bh * 3 + 16;
 
-  // --- Términos y condiciones ---------------------------------------------
-  doc.setFont(undefined, "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(...NEGRO);
+  doc.setFont(undefined, "bold"); doc.setFontSize(9.5); doc.setTextColor(...NEGRO);
   doc.text("TÉRMINOS Y CONDICIONES", PW / 2, y, { align: "center" });
   y += 14;
 
   doc.setFontSize(7);
   const anchoTxt = PW - 2 * M - 14;
-
   TERMINOS.forEach((t, i) => {
     const num = (i + 1) + ". ";
     const esUltimo = i === TERMINOS.length - 1;
@@ -1128,10 +1072,8 @@ async function generarPDFCotizacion(cotizacionId) {
     y += lineas.length * 8 + 2;
   });
 
-  // --- Guardar -------------------------------------------------------------
   doc.save(`${c.folio || "cotizacion"}.pdf`);
 }
-
 
 // ============================================================================
 // USUARIOS
@@ -1327,3 +1269,5 @@ el("btn-guardar-combo")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
   setTimeout(() => cerrarModal("modal-combo"), 1200);
 });
+ARCHIVO
+node --check /mnt/user-data/outputs/app.js && echo "OK-SINTAXIS" && wc -l /mnt/user-data/outputs/app.js
