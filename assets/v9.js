@@ -1,17 +1,27 @@
 // ============================================================================
-// Sistema Taller Automotriz · assets/v9.js · Integración V11.1
-// Dashboard, descuentos, adicionales, OT, carga, ingresos, bitácora
-// + Herramienta especial (identificador automático visible + historial real)
+// Sistema Taller Automotriz · assets/v9.js · V11.1
+// Dashboard + descuentos + adicionales + OT + carga + ingresos + bitácora
+// + Herramienta especial (identificador automático + historial)
+// + Orden de Trabajo con estilo SPEED CENTER (logo, fechas, técnico, firmas)
 // ============================================================================
 (() => {
 const $ = id => document.getElementById(id);
 let otId = null;
+
+// ---- Datos de empresa para impresiones (edítalo si cambia) -----------------
+const EMPRESA_OT = {
+  nombre: "SPEED CENTER",
+  direccion: "Cda. de Uniroyal 4, La Michoacana, 52166 San Jorge Pueblo Nuevo, México.",
+  telefono: "Teléfono 722 687 6487",
+  logo: "assets/logo.png"
+};
 
 function admin(){ return estado?.perfil?.rol === 'administrador'; }
 function staff(){ return ['administrador','recepcion'].includes(estado?.perfil?.rol); }
 function hoy(){ return new Date().toISOString().slice(0,10); }
 function texto(v, fallback='—'){ return v === null || v === undefined || v === '' ? fallback : String(v); }
 function fechaHora(v){ if(!v) return '—'; const d = new Date(v); return Number.isNaN(d.getTime()) ? texto(v) : d.toLocaleString('es-MX'); }
+function fechaCorta(v){ if(!v) return '—'; const d = new Date(v); return Number.isNaN(d.getTime()) ? texto(v) : d.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }); }
 function escapar(v){ return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function mostrarErrorV11(id, error, fallback){ const n=$(id); const msg=error?.message || fallback; console.error(msg,error||''); if(n) n.innerHTML=`<div style="color:#c0392b;margin-top:8px">${escapar(msg)}</div>`; }
 function limpiarMensajeV11(id){ const n=$(id); if(n) n.innerHTML=''; }
@@ -48,7 +58,6 @@ async function dashboard(){
   if($('dash-pagos'))$('dash-pagos').innerHTML=(data.ultimos_pagos||[]).map(p=>`<div>${escapar(p.folio)} · $${money(p.importe)} · ${escapar(p.metodo)}</div>`).join('')||'<small>Sin pagos hoy.</small>';
 }
 
-// Descuento general: compatibilidad con V8/V10.
 function calcDesc(){
   const tipo=document.querySelector('input[name="v9-desc-tipo"]:checked')?.value||'ninguno';
   const v=Number($('v9-desc-valor')?.value||0);
@@ -80,7 +89,6 @@ function bloquearCot(){
 }
 $('cotizacion-estado-comercial')?.addEventListener('change',()=>setTimeout(bloquearCot,0));
 
-// adicionales
 async function adicionales(){
   const id=$('cotizacion-id')?.value;if(!id)return;
   const {data}=await sb.from('cotizacion_adicionales').select('*').eq('cotizacion_id',id).order('created_at');
@@ -95,7 +103,6 @@ $('v9-guardar-adicional')?.addEventListener('click',async()=>{
   if(!error){cerrarModal('modal-v9-adicional');adicionales();}
 });
 
-// OT
 async function cargarOT(){let q=sb.rpc('ordenes_trabajo_listar');const {data}=await q;let l=data||[];if(estado.perfil?.rol==='tecnico')l=l.filter(x=>x.tecnico_id===estado.usuario.id);window.v9OT=l;renderOT();}
 function renderOT(){const txt=($('buscar-orden')?.value||'').toLowerCase(),f=$('filtro-orden')?.value||'';let l=window.v9OT||[];if(txt)l=l.filter(x=>[x.folio,x.cotizacion_folio,x.placa].some(v=>(v||'').toLowerCase().includes(txt)));if(f)l=l.filter(x=>x.estado===f);if($('tabla-ordenes'))$('tabla-ordenes').innerHTML=l.map(x=>`<tr><td>${escapar(x.folio)}</td><td>${escapar(x.cotizacion_folio)}</td><td>${escapar(x.placa)} · ${escapar(x.vehiculo)}</td><td>${escapar(x.tecnico||'Sin asignar')}</td><td>${x.realizados}/${x.total}</td><td>${escapar(x.estado)}</td><td><button class="btn secundario pequeno" data-ot="${x.id}">Abrir</button></td></tr>`).join('');document.querySelectorAll('[data-ot]').forEach(b=>b.onclick=()=>abrirOT(b.dataset.ot));}
 $('buscar-orden')?.addEventListener('input',renderOT);$('filtro-orden')?.addEventListener('change',renderOT);
@@ -127,7 +134,145 @@ async function abrirOT(id){
 }
 $('v9-guardar-ot')?.addEventListener('click',async()=>{if(!otId)return;if(window.v9OTTerminada){alert('Esta orden ya esta terminada y no puede modificarse.');return;}const checks=obtenerChecksOT().map(x=>({id:x.dataset.check,realizado:x.checked}));const boton=$('v9-guardar-ot'),original=boton.textContent;boton.disabled=true;boton.textContent='Guardando...';const {error}=await sb.rpc('guardar_avance_orden',{p_orden_id:otId,p_checks:checks,p_observaciones:$('v9-ot-observaciones').value,p_tecnico_id:$('v9-ot-tecnico').value||null});boton.disabled=false;boton.textContent=original;if(error){console.error('Error al guardar avance:',error);alert(error.message||'No fue posible guardar el avance.');return;}await cargarOT();cerrarModal('modal-v9-orden');});
 $('v9-finalizar-ot')?.addEventListener('click',async()=>{if(!otId||window.v9OTTerminada)return;const a=obtenerAvanceOT();if(!a.total){alert('La orden no contiene trabajos para finalizar.');return;}if(a.pendientes>0){alert(`No puedes finalizar esta orden.\n\nAvance: ${a.realizados} de ${a.total}.\nQuedan ${a.pendientes} trabajos pendientes.`);return;}if(!confirm(`Finalizar orden de trabajo\n\n${a.realizados} de ${a.total} trabajos estan realizados.\n\nLa orden quedara marcada como terminada.\n\n¿Deseas continuar?`))return;const boton=$('v9-finalizar-ot'),original=boton.textContent;boton.disabled=true;boton.textContent='Finalizando...';const {error}=await sb.rpc('finalizar_orden',{p_orden_id:otId});if(error){console.error('Error al finalizar OT:',error);boton.disabled=false;boton.textContent=original;alert(error.message||'No fue posible finalizar la orden.');return;}await cargarOT();cerrarModal('modal-v9-orden');});
-$('v9-imprimir-ot')?.addEventListener('click',()=>{const a=obtenerAvanceOT(),w=window.open('','_blank');if(!w)return;w.document.write(`<html><head><title>${escapar($('v9-ot-titulo').textContent)}</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1b2f4a}h1{border-bottom:2px solid #1b7884;padding-bottom:10px}h2{margin-top:28px;font-size:18px}.trabajo{padding:8px 0;border-bottom:1px solid #ddd}.avance{margin:15px 0;font-weight:bold}</style></head><body><h1>${escapar($('v9-ot-titulo').textContent)}</h1>${$('v9-ot-resumen').innerHTML}<h2>Trabajos autorizados</h2><div class="avance">Avance: ${a.realizados} de ${a.total} (${a.porcentaje}%)</div>${obtenerChecksOT().map(x=>`<div class="trabajo">${x.checked?'☑':'☐'} ${escapar(x.parentElement.innerText)}</div>`).join('')}<h2>Refacciones / caja</h2><p>Las piezas retiradas deberan colocarse en la caja correspondiente al vehiculo.</p><h2>Observaciones</h2><p>${escapar($('v9-ot-observaciones').value||'Sin observaciones.')}</p></body></html>`);w.document.close();w.focus();w.print();});
+
+// ============================================================================
+// IMPRIMIR ORDEN DE TRABAJO · estilo SPEED CENTER
+// ============================================================================
+$('v9-imprimir-ot')?.addEventListener('click', async () => {
+  if (!otId) { alert('Abre una orden primero.'); return; }
+
+  // Trae los datos completos de la orden
+  const { data: o, error } = await sb
+    .from('ordenes_trabajo')
+    .select('*, cotizaciones(folio, entrega_estimada, kilometraje_visita, cliente_id), vehiculos(placa, marca, modelo, anio, vin)')
+    .eq('id', otId)
+    .single();
+  if (error || !o) { alert('No fue posible cargar la orden para imprimir.'); return; }
+
+  // Cliente (desde la cotización) y técnico
+  let cliente = null, tecnico = null;
+  const cliId = o.cotizaciones?.cliente_id;
+  const [cliRes, tecRes] = await Promise.all([
+    cliId ? sb.from('clientes').select('nombre_completo, telefono').eq('id', cliId).single() : Promise.resolve({ data: null }),
+    o.tecnico_id ? sb.from('perfiles').select('nombre_completo').eq('id', o.tecnico_id).single() : Promise.resolve({ data: null })
+  ]);
+  cliente = cliRes.data; tecnico = tecRes.data;
+
+  // Avance y trabajos (desde el DOM, refleja lo que está en pantalla)
+  const a = obtenerAvanceOT();
+  const trabajos = obtenerChecksOT().map(x => ({ done: x.checked, txt: (x.parentElement?.innerText || '').trim() }));
+  const observaciones = $('v9-ot-observaciones')?.value || '';
+
+  const v = o.vehiculos || {};
+  const autoTxt = [v.marca, v.modelo, v.anio].filter(Boolean).join(' ');
+  const logoURL = new URL(EMPRESA_OT.logo, location.href).href;
+  const fechaOrden = fechaCorta(o.created_at || o.fecha);
+  const fechaEntrega = fechaCorta(o.cotizaciones?.entrega_estimada);
+  const km = o.cotizaciones?.kilometraje_visita;
+  const estadoTxt = o.estado === 'terminada' ? 'TERMINADA' : 'ABIERTA';
+  const estadoColor = o.estado === 'terminada' ? '#18794e' : '#d98c00';
+
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write(`
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${escapar(o.folio || 'Orden')}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#222; margin:0; padding:28px 34px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #c81414; padding-bottom:10px; }
+  .top img { max-height:52px; }
+  .emp { text-align:right; }
+  .emp .n { color:#c81414; font-weight:bold; font-size:16px; }
+  .emp .d { font-size:9px; color:#333; }
+  .titulo { margin:14px 0 4px; text-align:center; }
+  .titulo h1 { margin:0; font-size:18px; letter-spacing:1px; }
+  .folio { text-align:center; color:#c81414; font-weight:bold; font-size:15px; margin-bottom:12px; }
+  table.info { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  table.info td { border:1px solid #bbb; padding:5px 8px; font-size:10.5px; }
+  table.info td.lbl { background:#4d4d4d; color:#fff; font-weight:bold; width:120px; text-transform:uppercase; font-size:9px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:10px; color:#fff; font-weight:bold; font-size:10px; }
+  h2 { font-size:13px; border-bottom:1px solid #ccc; padding-bottom:4px; margin:16px 0 8px; }
+  .avance-box { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .barra { flex:1; height:12px; background:#eee; border-radius:6px; overflow:hidden; }
+  .barra span { display:block; height:100%; background:#1b7884; }
+  .avance-txt { font-size:11px; font-weight:bold; }
+  .trabajo { padding:6px 2px; border-bottom:1px dashed #ddd; font-size:11px; }
+  .obs { font-size:11px; white-space:pre-wrap; }
+  .firmas { display:flex; justify-content:space-between; margin-top:50px; }
+  .firma { width:44%; text-align:center; }
+  .firma .line { border-top:1px solid #333; margin-bottom:4px; }
+  .firma small { font-size:10px; color:#555; }
+  .pie { margin-top:24px; font-size:8.5px; color:#777; text-align:center; border-top:1px solid #ddd; padding-top:8px; }
+  @media print { body { padding:14px 20px; } }
+</style>
+</head>
+<body>
+  <div class="top">
+    <img src="${logoURL}" onerror="this.style.display='none'">
+    <div class="emp">
+      <div class="n">${escapar(EMPRESA_OT.nombre)}</div>
+      <div class="d">${escapar(EMPRESA_OT.direccion)}</div>
+      <div class="d">${escapar(EMPRESA_OT.telefono)}</div>
+    </div>
+  </div>
+
+  <div class="titulo"><h1>ORDEN DE TRABAJO</h1></div>
+  <div class="folio">${escapar(o.folio || '')}</div>
+
+  <table class="info">
+    <tr>
+      <td class="lbl">Fecha de la orden</td><td>${escapar(fechaOrden)}</td>
+      <td class="lbl">Estado</td><td><span class="badge" style="background:${estadoColor}">${estadoTxt}</span></td>
+    </tr>
+    <tr>
+      <td class="lbl">Cliente</td><td>${escapar(texto(cliente?.nombre_completo).toUpperCase())}</td>
+      <td class="lbl">Teléfono</td><td>${escapar(texto(cliente?.telefono))}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Vehículo</td><td>${escapar(texto(autoTxt).toUpperCase())}</td>
+      <td class="lbl">Placas</td><td>${escapar(texto(v.placa).toUpperCase())}</td>
+    </tr>
+    <tr>
+      <td class="lbl">VIN</td><td>${escapar(texto(v.vin))}</td>
+      <td class="lbl">Kilometraje</td><td>${km!=null?escapar(String(km)):'—'}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Técnico asignado</td><td>${escapar(texto(tecnico?.nombre_completo).toUpperCase())}</td>
+      <td class="lbl">Entrega estimada</td><td>${escapar(fechaEntrega)}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Cotización ref.</td><td colspan="3">${escapar(texto(o.cotizaciones?.folio))}</td>
+    </tr>
+  </table>
+
+  <h2>Trabajos autorizados</h2>
+  <div class="avance-box">
+    <div class="barra"><span style="width:${a.porcentaje}%"></span></div>
+    <div class="avance-txt">${a.realizados} de ${a.total} (${a.porcentaje}%)</div>
+  </div>
+  ${trabajos.length ? trabajos.map(t => `<div class="trabajo">${t.done ? '☑' : '☐'} ${escapar(t.txt)}</div>`).join('') : '<div class="trabajo">Sin trabajos registrados.</div>'}
+
+  <h2>Refacciones / caja</h2>
+  <div class="obs">Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</div>
+
+  <h2>Observaciones</h2>
+  <div class="obs">${escapar(observaciones || 'Sin observaciones.')}</div>
+
+  <div class="firmas">
+    <div class="firma"><div class="line"></div><small>Firma del cliente</small></div>
+    <div class="firma"><div class="line"></div><small>Firma del técnico</small></div>
+  </div>
+
+  <div class="pie">Documento generado el ${escapar(fechaCorta(new Date().toISOString()))} · ${escapar(EMPRESA_OT.nombre)}</div>
+</body>
+</html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+});
 
 // carga operativa (sin ranking)
 async function cargarCarga(){if(!admin())return;const mes=$('carga-mes').value||new Date().toISOString().slice(0,7);$('carga-mes').value=mes;const {data}=await sb.rpc('carga_trabajo_operativa',{p_mes:mes});$('carga-tecnicos').innerHTML=(data||[]).map(x=>`<div class="panel"><h3>${escapar(x.tecnico)}</h3><p>Órdenes abiertas: <b>${x.ordenes_abiertas}</b> · Trabajos pendientes: <b>${x.trabajos_pendientes}</b> · Órdenes atendidas en el mes: <b>${x.ordenes_mes}</b></p></div>`).join('')||'<div class="panel">Sin datos.</div>';}
@@ -182,7 +327,6 @@ $('filtro-herramienta')?.addEventListener('change',renderHerr);
 
 function limpiarFormularioHerramienta(){
   [['v11-herr-id',''],['v9-herr-nombre',''],['v11-herr-serie',''],['v11-herr-marca',''],['v11-herr-modelo',''],['v11-herr-ubicacion',''],['v9-herr-obs','']].forEach(([id,v])=>{if($(id))$(id).value=v;});
-  // Identificador automático: se genera y se muestra ANTES de guardar.
   if($('v9-herr-codigo')){ $('v9-herr-codigo').value = generarCodigoHerramientaV11(); }
   if($('v11-herr-titulo'))$('v11-herr-titulo').textContent='Nueva herramienta';
   limpiarMensajeV11('v11-herr-mensaje');
@@ -204,7 +348,6 @@ function abrirHerramientaEditar(id){
 }
 $('btn-nueva-herramienta')?.addEventListener('click',abrirHerramientaNueva);
 
-// GUARDAR HERRAMIENTA (un solo listener). Usa el identificador ya visible.
 $('v9-guardar-herr')?.addEventListener('click',async()=>{
   limpiarMensajeV11('v11-herr-mensaje');
   const id=$('v11-herr-id')?.value||'';
@@ -212,14 +355,11 @@ $('v9-guardar-herr')?.addEventListener('click',async()=>{
   const serie=$('v11-herr-serie')?.value.trim()||'';
   if(!nombre){mostrarErrorV11('v11-herr-mensaje',null,'El nombre de la herramienta es obligatorio.');return;}
   if(!serie){mostrarErrorV11('v11-herr-mensaje',null,'El número de serie es obligatorio.');return;}
-
   const boton=$('v9-guardar-herr');
   const original=boton?.textContent||'Guardar';
   if(boton){boton.disabled=true;boton.textContent='Guardando...';}
-
   try{
     const actual=id?(window.v9Herr||[]).find(x=>String(x.id)===String(id)):null;
-
     if(actual){
       const registro={nombre,observaciones:$('v9-herr-obs')?.value.trim()||null};
       const candidatos={numero_serie:serie,serie,marca:$('v11-herr-marca')?.value.trim()||null,modelo:$('v11-herr-modelo')?.value.trim()||null,ubicacion:$('v11-herr-ubicacion')?.value.trim()||null};
@@ -227,14 +367,12 @@ $('v9-guardar-herr')?.addEventListener('click',async()=>{
       const {error}=await sb.from('herramientas_especiales').update(registro).eq('id',id);
       if(error){mostrarErrorV11('v11-herr-mensaje',error,'No fue posible actualizar la herramienta.');return;}
     }else{
-      // Toma el identificador ya visible; si falta, genera uno (nunca NULL).
       const codigo=($('v9-herr-codigo')?.value.trim())||generarCodigoHerramientaV11();
       const registro={codigo,nombre,observaciones:$('v9-herr-obs')?.value.trim()||null};
       const {data,error}=await sb.from('herramientas_especiales').insert(registro).select().single();
       if(error){mostrarErrorV11('v11-herr-mensaje',error,'No fue posible registrar la herramienta.');return;}
       if($('v9-herr-codigo'))$('v9-herr-codigo').value=data?.codigo||codigo;
     }
-
     cerrarModal('modal-v9-herr');
     await cargarHerramientas();
     await dashboard();
@@ -290,7 +428,6 @@ $('v11-confirmar-devolucion')?.addEventListener('click',async()=>{
   cerrarModal('modal-v11-devolucion');await cargarHerramientas();dashboard();
 });
 
-// HISTORIAL: llama a la RPC v11_herramienta_historial.
 async function abrirHistorialHerramienta(id){
   const raw=(window.v9Herr||[]).find(x=>String(x.id)===String(id));const v=datosHerrV11(raw||{});
   if($('v11-historial-titulo'))$('v11-historial-titulo').textContent='Historial de herramienta';
@@ -301,7 +438,7 @@ async function abrirHistorialHerramienta(id){
   const {data,error}=await sb.rpc('v11_herramienta_historial',{p_herramienta_id:id});
   if(error){
     console.error('Error historial herramienta:',error);
-    tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial. Verifica que la función v11_herramienta_historial exista en Supabase.')}</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial.')}</td></tr>`;
     return;
   }
   if(!data||!data.length){
