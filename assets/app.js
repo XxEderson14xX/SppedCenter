@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/app.js <<'ARCHIVO'
 // ============================================================================
 // Sistema Taller Automotriz · app.js · Versión V11.1
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
@@ -1269,5 +1268,3 @@ el("btn-guardar-combo")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
   setTimeout(() => cerrarModal("modal-combo"), 1200);
 });
-ARCHIVO
-node --check /mnt/user-data/outputs/app.js && echo "OK-SINTAXIS" && wc -l /mnt/user-data/outputs/app.js
