@@ -33,6 +33,39 @@ function abrirModal(id) { el(id)?.classList.add("activo"); }
 function cerrarModal(id) { el(id)?.classList.remove("activo"); }
 function puedeEscribir() { return !!(estado.perfil && estado.perfil.rol !== "consulta"); }
 function esAdmin() { return !!(estado.perfil && estado.perfil.rol === "administrador"); }
+// === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
+const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
+function cotizacionBloqueada() {
+  const est = el("cotizacion-estado-comercial")?.value || "borrador";
+  return ESTADOS_BLOQUEO_EDICION.includes(est) && !esAdmin();
+}
+function aplicarBloqueoDatosCotizacion() {
+  const bloq = cotizacionBloqueada();
+  document.querySelectorAll('input[name="modo-cliente"]').forEach(r => r.disabled = bloq);
+  document.querySelectorAll('input[name="modo-vehiculo"]').forEach(r => r.disabled = bloq);
+  ["cliente-buscar","ncli-nombre","ncli-telefono","ncli-correo","ncli-rfc","ncli-direccion","ncli-obs",
+   "vehiculo-existente-select","nveh-anio","nveh-marca","nveh-modelo","nveh-version","nveh-motor",
+   "nveh-manual","nveh-marca-manual","nveh-modelo-manual","nveh-vin","nveh-placa","nveh-color","nveh-km",
+   "cotizacion-km","cotizacion-entrega"
+  ].forEach(id => { const e = el(id); if (e) e.disabled = bloq; });
+  const btnQ = el("btn-quitar-cliente"); if (btnQ) btnQ.style.display = bloq ? "none" : "";
+  const av = el("aviso-bloqueo-cotizacion"); if (av) av.style.display = bloq ? "flex" : "none";
+}
+async function cargarTecnicoAsignado(cotizacionId) {
+  const cont = el("cotizacion-tecnico-asignado");
+  if (!cont) return;
+  cont.textContent = "Técnico asignado: —";
+  if (!cotizacionId) return;
+  try {
+    const { data: ot } = await sb.from("ordenes_trabajo")
+      .select("tecnico_id").eq("cotizacion_id", cotizacionId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!ot) { cont.textContent = "Técnico asignado: (sin orden de trabajo)"; return; }
+    if (!ot.tecnico_id) { cont.textContent = "Técnico asignado: Sin asignar"; return; }
+    const { data: tec } = await sb.from("perfiles").select("nombre_completo").eq("id", ot.tecnico_id).single();
+    cont.textContent = "Técnico asignado: " + (tec?.nombre_completo || "Sin asignar");
+  } catch (e) { cont.textContent = "Técnico asignado: —"; }
+}
 
 document.querySelectorAll("[data-cerrar-modal]").forEach(b => b.addEventListener("click", () => cerrarModal(b.dataset.cerrarModal)));
 
@@ -622,6 +655,8 @@ async function abrirCotizacion(id) {
   renderConceptos();
   cargarCategoriasCotizacion();
   actualizarGatePagos();
+  aplicarBloqueoDatosCotizacion();
+  await cargarTecnicoAsignado(id);
   abrirModal("modal-cotizacion");
 }
 
@@ -675,7 +710,7 @@ function recalcularTotales() {
 el("btn-agregar-concepto")?.addEventListener("click", () => { estado.conceptosEnEdicion.push({ tipo:"servicio", descripcion:"", cantidad:1, precio_unitario:0, descuento:0, importe:0 }); renderConceptos(); });
 
 function actualizarVisibilidadPanelCierre() { el("panel-cierre").style.display = el("cotizacion-estado-comercial").value === "cerrada" ? "block" : "none"; }
-el("cotizacion-estado-comercial")?.addEventListener("change", actualizarVisibilidadPanelCierre);
+el("cotizacion-estado-comercial")?.addEventListener("change", () => { actualizarVisibilidadPanelCierre(); aplicarBloqueoDatosCotizacion(); });
 el("cotizacion-cerrar-adeudo")?.addEventListener("change", () => { el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none"; });
 
 function validarReglasDeCierre(saldoActual) {
