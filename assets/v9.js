@@ -1,14 +1,13 @@
 // ============================================================================
-// Sistema Taller Automotriz · assets/v9.js · V11.1
-// Dashboard + descuentos + adicionales + OT + carga + ingresos + bitácora
-// + Herramienta especial (identificador automático + historial)
-// + Orden de Trabajo con estilo SPEED CENTER (logo, fechas, técnico, firmas)
+// Sistema Taller Automotriz · assets/v9.js · V11.2
+// OT robusta (guardar/finalizar sin cuelgues) + Orden estilo SPEED CENTER
+// + Herramienta especial (identificador + historial)
 // ============================================================================
 (() => {
 const $ = id => document.getElementById(id);
 let otId = null;
+let otEnProceso = false;   // candado anti-doble-clic / anti-cuelgue
 
-// ---- Datos de empresa para impresiones (edítalo si cambia) -----------------
 const EMPRESA_OT = {
   nombre: "SPEED CENTER",
   direccion: "Cda. de Uniroyal 4, La Michoacana, 52166 San Jorge Pueblo Nuevo, México.",
@@ -108,10 +107,11 @@ function renderOT(){const txt=($('buscar-orden')?.value||'').toLowerCase(),f=$('
 $('buscar-orden')?.addEventListener('input',renderOT);$('filtro-orden')?.addEventListener('change',renderOT);
 $('btn-v9-ot')?.addEventListener('click',async()=>{const {data,error}=await sb.rpc('generar_orden_trabajo',{p_cotizacion_id:$('cotizacion-id').value});if(!error)abrirOT(data);});
 document.addEventListener('click',ev=>{const btn=ev.target.closest('[data-cerrar-modal]');if(!btn)return;const id=btn.dataset.cerrarModal;if(id&&document.getElementById(id))cerrarModal(id);});
+
 function obtenerChecksOT(){return [...document.querySelectorAll('[data-check]')];}
 function obtenerAvanceOT(){const checks=obtenerChecksOT();const total=checks.length;const realizados=checks.filter(x=>x.checked).length;return{total,realizados,pendientes:total-realizados,porcentaje:total?Math.round(realizados/total*100):0};}
-function actualizarAvanceOT(){const a=obtenerAvanceOT(),contador=$('v9-ot-contador'),porcentaje=$('v9-ot-porcentaje'),barra=$('v9-ot-barra'),todos=$('v9-seleccionar-todos'),finalizar=$('v9-finalizar-ot'),ayuda=$('v9-finalizar-ayuda');if(contador)contador.textContent=`${a.realizados} de ${a.total} realizados`;if(porcentaje)porcentaje.textContent=`${a.porcentaje}%`;if(barra)barra.style.width=`${a.porcentaje}%`;if(todos){todos.indeterminate=a.realizados>0&&a.realizados<a.total;todos.checked=a.total>0&&a.realizados===a.total;}if(finalizar&&!window.v9OTTerminada){const completo=a.total>0&&a.realizados===a.total;finalizar.disabled=!completo;finalizar.style.opacity=completo?'1':'0.55';finalizar.style.cursor=completo?'pointer':'not-allowed';if(ayuda){ayuda.textContent=completo?'Todos los trabajos estan realizados. La OT puede finalizarse.':a.total?`Faltan ${a.pendientes} trabajos por completar.`:'La orden no contiene trabajos.';ayuda.style.color=completo?'#18794e':'#9a6700';}}}
-function configurarSeleccionTodosOT(){const t=$('v9-seleccionar-todos');if(!t)return;t.onchange=()=>{if(window.v9OTTerminada)return;obtenerChecksOT().forEach(c=>c.checked=t.checked);actualizarAvanceOT();};}
+function actualizarAvanceOT(){const a=obtenerAvanceOT(),contador=$('v9-ot-contador'),porcentaje=$('v9-ot-porcentaje'),barra=$('v9-ot-barra'),todos=$('v9-seleccionar-todos'),finalizar=$('v9-finalizar-ot'),ayuda=$('v9-finalizar-ayuda');if(contador)contador.textContent=`${a.realizados} de ${a.total} realizados`;if(porcentaje)porcentaje.textContent=`${a.porcentaje}%`;if(barra)barra.style.width=`${a.porcentaje}%`;if(todos){todos.indeterminate=a.realizados>0&&a.realizados<a.total;todos.checked=a.total>0&&a.realizados===a.total;}if(finalizar&&!window.v9OTTerminada){const completo=a.total>0&&a.realizados===a.total;finalizar.style.opacity=completo?'1':'0.6';if(ayuda){ayuda.textContent=completo?'Todos los trabajos estan realizados. La OT puede finalizarse.':a.total?`Faltan ${a.pendientes} trabajos por completar.`:'La orden no contiene trabajos.';ayuda.style.color=completo?'#18794e':'#9a6700';}}}
+function configurarSeleccionTodosOT(){const t=$('v9-seleccionar-todos');if(!t)return;t.onchange=()=>{if(window.v9OTTerminada)return;const val=t.checked;obtenerChecksOT().forEach(c=>{c.checked=val;});actualizarAvanceOT();};}
 function configurarChecksOT(){obtenerChecksOT().forEach(c=>c.onchange=()=>{if(!window.v9OTTerminada)actualizarAvanceOT();});}
 function aplicarModoOT(terminada){window.v9OTTerminada=terminada;const tecnico=$('v9-ot-tecnico'),obs=$('v9-ot-observaciones'),guardar=$('v9-guardar-ot'),finalizar=$('v9-finalizar-ot'),todos=$('v9-seleccionar-todos'),visual=$('v9-ot-estado-visual');if(tecnico)tecnico.disabled=terminada;if(obs)obs.disabled=terminada;obtenerChecksOT().forEach(x=>x.disabled=terminada);if(todos){todos.disabled=terminada;const c=todos.closest('.v9-seleccionar-todos-contenedor');if(c)c.style.display=terminada?'none':'';}if(guardar)guardar.style.display=terminada?'none':'';if(finalizar)finalizar.style.display=terminada?'none':'';if(visual){visual.textContent=terminada?'TERMINADA':'ABIERTA';visual.className=`v9-ot-estado ${terminada?'v9-ot-estado-terminada':'v9-ot-estado-abierta'}`;}actualizarAvanceOT();}
 async function abrirOT(id){
@@ -132,37 +132,94 @@ async function abrirOT(id){
   $('v9-ot-observaciones').value=o.observaciones||'';
   configurarSeleccionTodosOT();configurarChecksOT();aplicarModoOT(o.estado==='terminada');abrirModal('modal-v9-orden');
 }
-$('v9-guardar-ot')?.addEventListener('click',async()=>{if(!otId)return;if(window.v9OTTerminada){alert('Esta orden ya esta terminada y no puede modificarse.');return;}const checks=obtenerChecksOT().map(x=>({id:x.dataset.check,realizado:x.checked}));const boton=$('v9-guardar-ot'),original=boton.textContent;boton.disabled=true;boton.textContent='Guardando...';const {error}=await sb.rpc('guardar_avance_orden',{p_orden_id:otId,p_checks:checks,p_observaciones:$('v9-ot-observaciones').value,p_tecnico_id:$('v9-ot-tecnico').value||null});boton.disabled=false;boton.textContent=original;if(error){console.error('Error al guardar avance:',error);alert(error.message||'No fue posible guardar el avance.');return;}await cargarOT();cerrarModal('modal-v9-orden');});
-$('v9-finalizar-ot')?.addEventListener('click',async()=>{if(!otId||window.v9OTTerminada)return;const a=obtenerAvanceOT();if(!a.total){alert('La orden no contiene trabajos para finalizar.');return;}if(a.pendientes>0){alert(`No puedes finalizar esta orden.\n\nAvance: ${a.realizados} de ${a.total}.\nQuedan ${a.pendientes} trabajos pendientes.`);return;}if(!confirm(`Finalizar orden de trabajo\n\n${a.realizados} de ${a.total} trabajos estan realizados.\n\nLa orden quedara marcada como terminada.\n\n¿Deseas continuar?`))return;const boton=$('v9-finalizar-ot'),original=boton.textContent;boton.disabled=true;boton.textContent='Finalizando...';const {error}=await sb.rpc('finalizar_orden',{p_orden_id:otId});if(error){console.error('Error al finalizar OT:',error);boton.disabled=false;boton.textContent=original;alert(error.message||'No fue posible finalizar la orden.');return;}await cargarOT();cerrarModal('modal-v9-orden');});
+
+// ---- Guardado robusto (una sola función, con candado y finally) ------------
+async function guardarAvanceOT({finalizar=false} = {}) {
+  if (!otId) return;
+  if (window.v9OTTerminada) { alert('Esta orden ya está terminada y no puede modificarse.'); return; }
+  if (otEnProceso) return;            // evita doble clic / recursión
+  otEnProceso = true;
+
+  const btnGuardar = $('v9-guardar-ot');
+  const btnFinalizar = $('v9-finalizar-ot');
+  const txtG = btnGuardar ? btnGuardar.textContent : '';
+  const txtF = btnFinalizar ? btnFinalizar.textContent : '';
+
+  if (btnGuardar) { btnGuardar.disabled = true; }
+  if (btnFinalizar) { btnFinalizar.disabled = true; }
+  if (finalizar && btnFinalizar) btnFinalizar.textContent = 'Finalizando...';
+  else if (btnGuardar) btnGuardar.textContent = 'Guardando...';
+
+  try {
+    // Estado REAL de las casillas en este instante
+    const checks = obtenerChecksOT().map(x => ({ id: x.dataset.check, realizado: !!x.checked }));
+
+    // 1) Siempre guarda el avance actual
+    const { error: errG } = await sb.rpc('guardar_avance_orden', {
+      p_orden_id: otId,
+      p_checks: checks,
+      p_observaciones: $('v9-ot-observaciones')?.value || '',
+      p_tecnico_id: $('v9-ot-tecnico')?.value || null
+    });
+    if (errG) { console.error('Error al guardar avance:', errG); alert(errG.message || 'No fue posible guardar el avance.'); return; }
+
+    // 2) Si NO es finalizar, terminamos aquí
+    if (!finalizar) {
+      await cargarOT();
+      cerrarModal('modal-v9-orden');
+      return;
+    }
+
+    // 3) Finalizar: valida con el estado real (ya guardado)
+    const a = obtenerAvanceOT();
+    if (!a.total) { alert('La orden no contiene trabajos para finalizar.'); return; }
+    if (a.pendientes > 0) {
+      alert(`No puedes finalizar esta orden.\n\nAvance: ${a.realizados} de ${a.total}.\nQuedan ${a.pendientes} trabajos pendientes.`);
+      return;
+    }
+    if (!confirm(`Finalizar orden de trabajo\n\n${a.realizados} de ${a.total} trabajos están realizados.\n\nLa orden quedará marcada como terminada.\n\n¿Deseas continuar?`)) return;
+
+    const { error: errF } = await sb.rpc('finalizar_orden', { p_orden_id: otId });
+    if (errF) { console.error('Error al finalizar OT:', errF); alert(errF.message || 'No fue posible finalizar la orden.'); return; }
+
+    await cargarOT();
+    cerrarModal('modal-v9-orden');
+
+  } catch (e) {
+    console.error('Error inesperado en OT:', e);
+    alert(e?.message || 'Ocurrió un error inesperado.');
+  } finally {
+    // Pase lo que pase, se re-habilitan los botones (nunca se congela)
+    otEnProceso = false;
+    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = txtG || 'Guardar avance'; }
+    if (btnFinalizar) { btnFinalizar.disabled = false; btnFinalizar.textContent = txtF || 'Finalizar'; }
+  }
+}
+
+$('v9-guardar-ot')?.addEventListener('click', () => guardarAvanceOT({ finalizar: false }));
+$('v9-finalizar-ot')?.addEventListener('click', () => guardarAvanceOT({ finalizar: true }));
 
 // ============================================================================
 // IMPRIMIR ORDEN DE TRABAJO · estilo SPEED CENTER
 // ============================================================================
 $('v9-imprimir-ot')?.addEventListener('click', async () => {
   if (!otId) { alert('Abre una orden primero.'); return; }
-
-  // Trae los datos completos de la orden
   const { data: o, error } = await sb
     .from('ordenes_trabajo')
     .select('*, cotizaciones(folio, entrega_estimada, kilometraje_visita, cliente_id), vehiculos(placa, marca, modelo, anio, vin)')
-    .eq('id', otId)
-    .single();
+    .eq('id', otId).single();
   if (error || !o) { alert('No fue posible cargar la orden para imprimir.'); return; }
 
-  // Cliente (desde la cotización) y técnico
-  let cliente = null, tecnico = null;
   const cliId = o.cotizaciones?.cliente_id;
   const [cliRes, tecRes] = await Promise.all([
     cliId ? sb.from('clientes').select('nombre_completo, telefono').eq('id', cliId).single() : Promise.resolve({ data: null }),
     o.tecnico_id ? sb.from('perfiles').select('nombre_completo').eq('id', o.tecnico_id).single() : Promise.resolve({ data: null })
   ]);
-  cliente = cliRes.data; tecnico = tecRes.data;
+  const cliente = cliRes.data, tecnico = tecRes.data;
 
-  // Avance y trabajos (desde el DOM, refleja lo que está en pantalla)
   const a = obtenerAvanceOT();
   const trabajos = obtenerChecksOT().map(x => ({ done: x.checked, txt: (x.parentElement?.innerText || '').trim() }));
   const observaciones = $('v9-ot-observaciones')?.value || '';
-
   const v = o.vehiculos || {};
   const autoTxt = [v.marca, v.modelo, v.anio].filter(Boolean).join(' ');
   const logoURL = new URL(EMPRESA_OT.logo, location.href).href;
@@ -175,110 +232,52 @@ $('v9-imprimir-ot')?.addEventListener('click', async () => {
   const w = window.open('', '_blank');
   if (!w) return;
   w.document.write(`
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${escapar(o.folio || 'Orden')}</title>
+<html><head><meta charset="UTF-8"><title>${escapar(o.folio || 'Orden')}</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color:#222; margin:0; padding:28px 34px; }
-  .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #c81414; padding-bottom:10px; }
-  .top img { max-height:52px; }
-  .emp { text-align:right; }
-  .emp .n { color:#c81414; font-weight:bold; font-size:16px; }
-  .emp .d { font-size:9px; color:#333; }
-  .titulo { margin:14px 0 4px; text-align:center; }
-  .titulo h1 { margin:0; font-size:18px; letter-spacing:1px; }
-  .folio { text-align:center; color:#c81414; font-weight:bold; font-size:15px; margin-bottom:12px; }
-  table.info { width:100%; border-collapse:collapse; margin-bottom:14px; }
-  table.info td { border:1px solid #bbb; padding:5px 8px; font-size:10.5px; }
-  table.info td.lbl { background:#4d4d4d; color:#fff; font-weight:bold; width:120px; text-transform:uppercase; font-size:9px; }
-  .badge { display:inline-block; padding:2px 10px; border-radius:10px; color:#fff; font-weight:bold; font-size:10px; }
-  h2 { font-size:13px; border-bottom:1px solid #ccc; padding-bottom:4px; margin:16px 0 8px; }
-  .avance-box { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-  .barra { flex:1; height:12px; background:#eee; border-radius:6px; overflow:hidden; }
-  .barra span { display:block; height:100%; background:#1b7884; }
-  .avance-txt { font-size:11px; font-weight:bold; }
-  .trabajo { padding:6px 2px; border-bottom:1px dashed #ddd; font-size:11px; }
-  .obs { font-size:11px; white-space:pre-wrap; }
-  .firmas { display:flex; justify-content:space-between; margin-top:50px; }
-  .firma { width:44%; text-align:center; }
-  .firma .line { border-top:1px solid #333; margin-bottom:4px; }
-  .firma small { font-size:10px; color:#555; }
-  .pie { margin-top:24px; font-size:8.5px; color:#777; text-align:center; border-top:1px solid #ddd; padding-top:8px; }
-  @media print { body { padding:14px 20px; } }
-</style>
-</head>
-<body>
-  <div class="top">
-    <img src="${logoURL}" onerror="this.style.display='none'">
-    <div class="emp">
-      <div class="n">${escapar(EMPRESA_OT.nombre)}</div>
-      <div class="d">${escapar(EMPRESA_OT.direccion)}</div>
-      <div class="d">${escapar(EMPRESA_OT.telefono)}</div>
-    </div>
+  *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;padding:28px 34px;}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #c81414;padding-bottom:10px;}
+  .top img{max-height:52px;} .emp{text-align:right;} .emp .n{color:#c81414;font-weight:bold;font-size:16px;} .emp .d{font-size:9px;color:#333;}
+  .titulo{margin:14px 0 4px;text-align:center;} .titulo h1{margin:0;font-size:18px;letter-spacing:1px;}
+  .folio{text-align:center;color:#c81414;font-weight:bold;font-size:15px;margin-bottom:12px;}
+  table.info{width:100%;border-collapse:collapse;margin-bottom:14px;} table.info td{border:1px solid #bbb;padding:5px 8px;font-size:10.5px;}
+  table.info td.lbl{background:#4d4d4d;color:#fff;font-weight:bold;width:120px;text-transform:uppercase;font-size:9px;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:10px;color:#fff;font-weight:bold;font-size:10px;}
+  h2{font-size:13px;border-bottom:1px solid #ccc;padding-bottom:4px;margin:16px 0 8px;}
+  .avance-box{display:flex;align-items:center;gap:10px;margin-bottom:8px;} .barra{flex:1;height:12px;background:#eee;border-radius:6px;overflow:hidden;} .barra span{display:block;height:100%;background:#1b7884;}
+  .avance-txt{font-size:11px;font-weight:bold;} .trabajo{padding:6px 2px;border-bottom:1px dashed #ddd;font-size:11px;} .obs{font-size:11px;white-space:pre-wrap;}
+  .firmas{display:flex;justify-content:space-between;margin-top:50px;} .firma{width:44%;text-align:center;} .firma .line{border-top:1px solid #333;margin-bottom:4px;} .firma small{font-size:10px;color:#555;}
+  .pie{margin-top:24px;font-size:8.5px;color:#777;text-align:center;border-top:1px solid #ddd;padding-top:8px;}
+  @media print{body{padding:14px 20px;}}
+</style></head><body>
+  <div class="top"><img src="${logoURL}" onerror="this.style.display='none'">
+    <div class="emp"><div class="n">${escapar(EMPRESA_OT.nombre)}</div><div class="d">${escapar(EMPRESA_OT.direccion)}</div><div class="d">${escapar(EMPRESA_OT.telefono)}</div></div>
   </div>
-
   <div class="titulo"><h1>ORDEN DE TRABAJO</h1></div>
   <div class="folio">${escapar(o.folio || '')}</div>
-
   <table class="info">
-    <tr>
-      <td class="lbl">Fecha de la orden</td><td>${escapar(fechaOrden)}</td>
-      <td class="lbl">Estado</td><td><span class="badge" style="background:${estadoColor}">${estadoTxt}</span></td>
-    </tr>
-    <tr>
-      <td class="lbl">Cliente</td><td>${escapar(texto(cliente?.nombre_completo).toUpperCase())}</td>
-      <td class="lbl">Teléfono</td><td>${escapar(texto(cliente?.telefono))}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Vehículo</td><td>${escapar(texto(autoTxt).toUpperCase())}</td>
-      <td class="lbl">Placas</td><td>${escapar(texto(v.placa).toUpperCase())}</td>
-    </tr>
-    <tr>
-      <td class="lbl">VIN</td><td>${escapar(texto(v.vin))}</td>
-      <td class="lbl">Kilometraje</td><td>${km!=null?escapar(String(km)):'—'}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Técnico asignado</td><td>${escapar(texto(tecnico?.nombre_completo).toUpperCase())}</td>
-      <td class="lbl">Entrega estimada</td><td>${escapar(fechaEntrega)}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Cotización ref.</td><td colspan="3">${escapar(texto(o.cotizaciones?.folio))}</td>
-    </tr>
+    <tr><td class="lbl">Fecha de la orden</td><td>${escapar(fechaOrden)}</td><td class="lbl">Estado</td><td><span class="badge" style="background:${estadoColor}">${estadoTxt}</span></td></tr>
+    <tr><td class="lbl">Cliente</td><td>${escapar(texto(cliente?.nombre_completo).toUpperCase())}</td><td class="lbl">Teléfono</td><td>${escapar(texto(cliente?.telefono))}</td></tr>
+    <tr><td class="lbl">Vehículo</td><td>${escapar(texto(autoTxt).toUpperCase())}</td><td class="lbl">Placas</td><td>${escapar(texto(v.placa).toUpperCase())}</td></tr>
+    <tr><td class="lbl">VIN</td><td>${escapar(texto(v.vin))}</td><td class="lbl">Kilometraje</td><td>${km!=null?escapar(String(km)):'—'}</td></tr>
+    <tr><td class="lbl">Técnico asignado</td><td>${escapar(texto(tecnico?.nombre_completo).toUpperCase())}</td><td class="lbl">Entrega estimada</td><td>${escapar(fechaEntrega)}</td></tr>
+    <tr><td class="lbl">Cotización ref.</td><td colspan="3">${escapar(texto(o.cotizaciones?.folio))}</td></tr>
   </table>
-
   <h2>Trabajos autorizados</h2>
-  <div class="avance-box">
-    <div class="barra"><span style="width:${a.porcentaje}%"></span></div>
-    <div class="avance-txt">${a.realizados} de ${a.total} (${a.porcentaje}%)</div>
-  </div>
+  <div class="avance-box"><div class="barra"><span style="width:${a.porcentaje}%"></span></div><div class="avance-txt">${a.realizados} de ${a.total} (${a.porcentaje}%)</div></div>
   ${trabajos.length ? trabajos.map(t => `<div class="trabajo">${t.done ? '☑' : '☐'} ${escapar(t.txt)}</div>`).join('') : '<div class="trabajo">Sin trabajos registrados.</div>'}
-
-  <h2>Refacciones / caja</h2>
-  <div class="obs">Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</div>
-
-  <h2>Observaciones</h2>
-  <div class="obs">${escapar(observaciones || 'Sin observaciones.')}</div>
-
-  <div class="firmas">
-    <div class="firma"><div class="line"></div><small>Firma del cliente</small></div>
-    <div class="firma"><div class="line"></div><small>Firma del técnico</small></div>
-  </div>
-
+  <h2>Refacciones / caja</h2><div class="obs">Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</div>
+  <h2>Observaciones</h2><div class="obs">${escapar(observaciones || 'Sin observaciones.')}</div>
+  <div class="firmas"><div class="firma"><div class="line"></div><small>Firma del cliente</small></div><div class="firma"><div class="line"></div><small>Firma del técnico</small></div></div>
   <div class="pie">Documento generado el ${escapar(fechaCorta(new Date().toISOString()))} · ${escapar(EMPRESA_OT.nombre)}</div>
-</body>
-</html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 400);
+</body></html>`);
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
 });
 
 // carga operativa (sin ranking)
 async function cargarCarga(){if(!admin())return;const mes=$('carga-mes').value||new Date().toISOString().slice(0,7);$('carga-mes').value=mes;const {data}=await sb.rpc('carga_trabajo_operativa',{p_mes:mes});$('carga-tecnicos').innerHTML=(data||[]).map(x=>`<div class="panel"><h3>${escapar(x.tecnico)}</h3><p>Órdenes abiertas: <b>${x.ordenes_abiertas}</b> · Trabajos pendientes: <b>${x.trabajos_pendientes}</b> · Órdenes atendidas en el mes: <b>${x.ordenes_mes}</b></p></div>`).join('')||'<div class="panel">Sin datos.</div>';}
 $('carga-mes')?.addEventListener('change',cargarCarga);
 
-// ingresos: consulta únicamente
+// ingresos
 async function cargarIngresos(){const f=$('ingresos-fecha').value||hoy();$('ingresos-fecha').value=f;const {data}=await sb.rpc('ingresos_por_dia',{p_fecha:f});let l=data||[],m=$('ingresos-metodo').value;if(m)l=l.filter(x=>x.metodo===m);const sum=met=>l.filter(x=>x.estado==='valido'&&(!met||x.metodo===met)).reduce((s,x)=>s+Number(x.importe),0);$('ing-total').textContent='$'+money(sum());$('ing-efectivo').textContent='$'+money(sum('efectivo'));$('ing-transferencia').textContent='$'+money(sum('transferencia'));$('ing-tarjeta').textContent='$'+money(sum('tarjeta'));$('tabla-ingresos').innerHTML=l.map(x=>`<tr><td>${new Date(x.fecha_hora).toLocaleTimeString('es-MX')}</td><td>${escapar(x.folio)}</td><td>${escapar(x.cliente)} · ${escapar(x.placa)}</td><td>${escapar(x.metodo)}</td><td>${escapar(x.referencia||'—')}</td><td>$${money(x.importe)}</td><td>${escapar(x.estado)}</td></tr>`).join('');}
 $('ingresos-fecha')?.addEventListener('change',cargarIngresos);$('ingresos-metodo')?.addEventListener('change',cargarIngresos);
 
@@ -286,27 +285,13 @@ $('ingresos-fecha')?.addEventListener('change',cargarIngresos);$('ingresos-metod
 // HERRAMIENTA ESPECIAL · V11.1
 // ============================================================================
 function valorHerr(x,...nombres){for(const n of nombres){if(Object.prototype.hasOwnProperty.call(x||{},n))return x[n];}return null;}
-function datosHerrV11(x){return{
-  id:valorHerr(x,'id'),
-  codigo:valorHerr(x,'codigo','identificador'),
-  nombre:valorHerr(x,'nombre'),
-  serie:valorHerr(x,'numero_serie','serie'),
-  marca:valorHerr(x,'marca'),
-  modelo:valorHerr(x,'modelo'),
-  ubicacion:valorHerr(x,'ubicacion'),
-  estado:valorHerr(x,'estado'),
-  asignada:valorHerr(x,'asignada_a','tecnico'),
-  desde:valorHerr(x,'desde','prestado_desde'),
-  observaciones:valorHerr(x,'observaciones')
-};}
+function datosHerrV11(x){return{id:valorHerr(x,'id'),codigo:valorHerr(x,'codigo','identificador'),nombre:valorHerr(x,'nombre'),serie:valorHerr(x,'numero_serie','serie'),marca:valorHerr(x,'marca'),modelo:valorHerr(x,'modelo'),ubicacion:valorHerr(x,'ubicacion'),estado:valorHerr(x,'estado'),asignada:valorHerr(x,'asignada_a','tecnico'),desde:valorHerr(x,'desde','prestado_desde'),observaciones:valorHerr(x,'observaciones')};}
 async function cargarHerramientas(){
-  const tabla=$('tabla-herramientas');
-  if(!tabla)return;
+  const tabla=$('tabla-herramientas');if(!tabla)return;
   tabla.innerHTML='<tr><td colspan="9" class="vacio-tabla">Cargando…</td></tr>';
   const {data,error}=await sb.rpc('herramientas_listar');
   if(error){console.error('Error al cargar herramientas:',error);tabla.innerHTML=`<tr><td colspan="9" class="vacio-tabla">${escapar(error.message||'No fue posible cargar las herramientas.')}</td></tr>`;return;}
-  window.v9Herr=data||[];
-  renderHerr();
+  window.v9Herr=data||[];renderHerr();
 }
 function renderHerr(){
   const tabla=$('tabla-herramientas');if(!tabla)return;
@@ -324,7 +309,6 @@ function renderHerr(){
 }
 $('buscar-herramienta')?.addEventListener('input',renderHerr);
 $('filtro-herramienta')?.addEventListener('change',renderHerr);
-
 function limpiarFormularioHerramienta(){
   [['v11-herr-id',''],['v9-herr-nombre',''],['v11-herr-serie',''],['v11-herr-marca',''],['v11-herr-modelo',''],['v11-herr-ubicacion',''],['v9-herr-obs','']].forEach(([id,v])=>{if($(id))$(id).value=v;});
   if($('v9-herr-codigo')){ $('v9-herr-codigo').value = generarCodigoHerramientaV11(); }
@@ -347,7 +331,6 @@ function abrirHerramientaEditar(id){
   limpiarMensajeV11('v11-herr-mensaje');abrirModal('modal-v9-herr');
 }
 $('btn-nueva-herramienta')?.addEventListener('click',abrirHerramientaNueva);
-
 $('v9-guardar-herr')?.addEventListener('click',async()=>{
   limpiarMensajeV11('v11-herr-mensaje');
   const id=$('v11-herr-id')?.value||'';
@@ -355,8 +338,7 @@ $('v9-guardar-herr')?.addEventListener('click',async()=>{
   const serie=$('v11-herr-serie')?.value.trim()||'';
   if(!nombre){mostrarErrorV11('v11-herr-mensaje',null,'El nombre de la herramienta es obligatorio.');return;}
   if(!serie){mostrarErrorV11('v11-herr-mensaje',null,'El número de serie es obligatorio.');return;}
-  const boton=$('v9-guardar-herr');
-  const original=boton?.textContent||'Guardar';
+  const boton=$('v9-guardar-herr');const original=boton?.textContent||'Guardar';
   if(boton){boton.disabled=true;boton.textContent='Guardando...';}
   try{
     const actual=id?(window.v9Herr||[]).find(x=>String(x.id)===String(id)):null;
@@ -373,23 +355,14 @@ $('v9-guardar-herr')?.addEventListener('click',async()=>{
       if(error){mostrarErrorV11('v11-herr-mensaje',error,'No fue posible registrar la herramienta.');return;}
       if($('v9-herr-codigo'))$('v9-herr-codigo').value=data?.codigo||codigo;
     }
-    cerrarModal('modal-v9-herr');
-    await cargarHerramientas();
-    await dashboard();
-  }catch(error){
-    mostrarErrorV11('v11-herr-mensaje',error,'Ocurrió un error inesperado al guardar la herramienta.');
-  }finally{
-    if(boton){boton.disabled=false;boton.textContent=original;}
-  }
+    cerrarModal('modal-v9-herr');await cargarHerramientas();await dashboard();
+  }catch(error){mostrarErrorV11('v11-herr-mensaje',error,'Ocurrió un error inesperado al guardar la herramienta.');}
+  finally{if(boton){boton.disabled=false;boton.textContent=original;}}
 });
-
 async function prestamo(id){
   if($('v9-prestamo-id'))$('v9-prestamo-id').value=id;
   if($('v9-prestamo-obs'))$('v9-prestamo-obs').value='';
-  const [{data:t,error:et},{data:o,error:eo}]=await Promise.all([
-    sb.from('perfiles').select('id,nombre_completo').eq('rol','tecnico').eq('activo',true),
-    sb.from('ordenes_trabajo').select('id,folio').eq('estado','abierta')
-  ]);
+  const [{data:t,error:et},{data:o,error:eo}]=await Promise.all([sb.from('perfiles').select('id,nombre_completo').eq('rol','tecnico').eq('activo',true),sb.from('ordenes_trabajo').select('id,folio').eq('estado','abierta')]);
   if(et){alert(et.message||'No fue posible cargar los técnicos.');return;}
   if(eo)console.error('No fue posible cargar las OT abiertas:',eo);
   if($('v9-prestamo-tecnico'))$('v9-prestamo-tecnico').innerHTML='<option value="">Selecciona…</option>'+(t||[]).map(x=>`<option value="${x.id}">${escapar(x.nombre_completo)}</option>`).join('');
@@ -402,15 +375,8 @@ $('v9-confirmar-prestamo')?.addEventListener('click',async()=>{
   if(error){console.error('Error al prestar herramienta:',error);alert(error.message||'No fue posible prestar la herramienta.');return;}
   cerrarModal('modal-v9-prestamo');await cargarHerramientas();dashboard();
 });
-
 function abrirDevolucion(id){
-  if($('modal-v11-devolucion')&&$('v11-devolucion-id')){
-    $('v11-devolucion-id').value=id;
-    if($('v11-devolucion-obs'))$('v11-devolucion-obs').value='';
-    limpiarMensajeV11('v11-devolucion-mensaje');
-    abrirModal('modal-v11-devolucion');
-    return;
-  }
+  if($('modal-v11-devolucion')&&$('v11-devolucion-id')){$('v11-devolucion-id').value=id;if($('v11-devolucion-obs'))$('v11-devolucion-obs').value='';limpiarMensajeV11('v11-devolucion-mensaje');abrirModal('modal-v11-devolucion');return;}
   devolverHerramientaDirecta(id);
 }
 async function devolverHerramientaDirecta(id){
@@ -427,7 +393,6 @@ $('v11-confirmar-devolucion')?.addEventListener('click',async()=>{
   if(error){mostrarErrorV11('v11-devolucion-mensaje',error,'No fue posible devolver la herramienta.');return;}
   cerrarModal('modal-v11-devolucion');await cargarHerramientas();dashboard();
 });
-
 async function abrirHistorialHerramienta(id){
   const raw=(window.v9Herr||[]).find(x=>String(x.id)===String(id));const v=datosHerrV11(raw||{});
   if($('v11-historial-titulo'))$('v11-historial-titulo').textContent='Historial de herramienta';
@@ -436,15 +401,8 @@ async function abrirHistorialHerramienta(id){
   tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Cargando…</td></tr>';
   abrirModal('modal-v11-historial');
   const {data,error}=await sb.rpc('v11_herramienta_historial',{p_herramienta_id:id});
-  if(error){
-    console.error('Error historial herramienta:',error);
-    tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial.')}</td></tr>`;
-    return;
-  }
-  if(!data||!data.length){
-    tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Sin movimientos registrados.</td></tr>';
-    return;
-  }
+  if(error){console.error('Error historial herramienta:',error);tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial.')}</td></tr>`;return;}
+  if(!data||!data.length){tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Sin movimientos registrados.</td></tr>';return;}
   tbody.innerHTML=data.map(m=>`<tr><td>${escapar(fechaHora(m.salida_at))}</td><td>${escapar(m.devolucion_at?fechaHora(m.devolucion_at):'Pendiente')}</td><td>${escapar(texto(m.tecnico))}</td><td>${escapar(texto(m.orden_folio))}</td><td>${escapar(texto(m.entregado_por))}</td><td>${escapar(texto(m.recibido_por))}</td><td>${escapar([m.observacion_salida,m.observacion_devolucion].filter(Boolean).join(' / ')||'—')}</td></tr>`).join('');
 }
 
