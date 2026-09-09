@@ -42,12 +42,18 @@ a { color:var(--teal); }
 /* -------------------- SHELL -------------------- */
 #app-shell { display:none; min-height:100vh; }
 #app-shell.activo { display:flex; }
-#nav-lateral { width:250px; background:var(--navy); color:#cdd6e0; min-height:100vh; display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; }
+#nav-lateral { width:250px; background:var(--navy); color:#cdd6e0; height:100vh; max-height:100vh; display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; overflow:hidden; }
 .marca { display:block; padding:18px 20px; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.1); transition:opacity .15s ease; }
+.marca { flex-shrink:0; }
 .marca:hover { opacity:.85; }
 .marca-logo { max-width:100%; height:auto; display:block; }
 .marca small { display:block; font-size:11px; font-weight:400; color:#9fb0c4; margin-top:6px; }
 .nav-item { padding:13px 20px; cursor:pointer; font-size:14px; color:#cdd6e0; border-left:3px solid transparent; text-decoration:none; display:block; }
+#nav-lateral { overflow:hidden; }
+#nav-lateral > .nav-item:first-of-type ~ .nav-item,
+#nav-lateral > .nav-item:first-of-type {
+  /* marcador para claridad; el contenedor real de scroll se define abajo */
+}
 .nav-item:hover { background:rgba(255,255,255,.06); color:#fff; }
 .nav-item.activo { background:var(--teal); color:#fff; border-left-color:#fff; }
 .pie { margin-top:auto; padding:16px 20px; border-top:1px solid rgba(255,255,255,.1); font-size:12px; color:#9fb0c4; }
