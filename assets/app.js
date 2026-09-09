@@ -39,33 +39,37 @@ function puedeOperarCotizacion() {
   const rol = estado?.perfil?.rol;
   return rol === "administrador" || rol === "recepcion";
 }
+function cotizacionBloqueada() {
+  const est = el("cotizacion-estado-comercial")?.value || "borrador";
+  const bloqueoPorEstado = ESTADOS_BLOQUEO_EDICION.includes(est) && !esAdmin();
+  const bloqueoPorRol = !puedeOperarCotizacion(); // consulta y tecnico: siempre bloqueado
+  return bloqueoPorEstado || bloqueoPorRol;
+}
+
 function aplicarPermisosCotizacion() {
   const puede = puedeOperarCotizacion();
 
-  // Botón "+ Nueva cotización"
+  // Oculta "+ Nueva cotización"
   const btnNueva = el("btn-nueva-cotizacion");
   if (btnNueva) btnNueva.style.display = puede ? "" : "none";
 
-  // Pestaña "Pagos" (se oculta para quien no puede operar)
+  // Oculta la pestaña "Pagos"
   const tabPagos = document.querySelector('.pestana[data-pestana="pagos"]');
   if (tabPagos) tabPagos.style.display = puede ? "" : "none";
 
-  // Dentro del modal de cotización: botones de acción
-  ["btn-guardar-cotizacion","btn-agregar-concepto","btn-cat-agregar",
-   "btn-agregar-pago","btn-agregar-seguimiento","btn-subir-archivo",
-   "btn-v9-ot","btn-v9-adicional"
-  ].forEach(id => { const e = el(id); if (e) e.style.display = puede ? "" : "none"; });
-
-  // Campos de conceptos y captura (solo lectura si no puede)
-  document.querySelectorAll('#cuerpo-conceptos [data-campo], #cuerpo-conceptos [data-quitar]')
-    .forEach(e => { if (!puede) { e.disabled = true; e.style.pointerEvents = "none"; } });
-
-  // Si por alguna razón está en la pestaña Pagos y no puede, lo mandamos a Datos
-  if (!puede) {
-    const tabPagosActiva = document.querySelector('.pestana[data-pestana="pagos"].activa');
-    if (tabPagosActiva) document.querySelector('.pestana[data-pestana="datos"]')?.click();
+  // Si no puede operar (consulta / tecnico): deja el modal en SOLO LECTURA total
+  const modal = el("modal-cotizacion");
+  if (modal) {
+    const idsPermitidos = ["btn-pdf-cotizacion"]; // Descargar PDF siempre disponible
+    modal.querySelectorAll("input, select, textarea, button").forEach((campo) => {
+      if (idsPermitidos.includes(campo.id)) return;
+      if (campo.classList.contains("cerrar")) return;      // botón "X"
+      if (campo.dataset.cerrarModal) return;                 // botón "Cerrar"
+      campo.disabled = !puede;
+    });
   }
 }
+
 // === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
 const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
 function cotizacionBloqueada() {
