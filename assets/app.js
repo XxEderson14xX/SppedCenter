@@ -1,18 +1,16 @@
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V11.1
+// Sistema Taller Automotriz · app.js · Versión V11.2
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
 // + V8 (cascada de catálogo maestro + combos) + V10 (Catálogo Maestro)
 // + V11.1 (PDF estilo Speed Center: folio auto-ajuste, totales separados, anticipo 50%)
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const estado = {
   usuario: null, perfil: null,
   clientes: [], vehiculos: [], servicios: [], categorias: [], catalogoMaestro: [],
   cotizacionActualId: null, conceptosEnEdicion: [],
 };
 const seleccion = { clienteId: null, vehiculoId: null };
-
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
@@ -39,24 +37,22 @@ function puedeOperarCotizacion() {
   const rol = estado?.perfil?.rol;
   return rol === "administrador" || rol === "recepcion";
 }
+// === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
+const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
 function cotizacionBloqueada() {
   const est = el("cotizacion-estado-comercial")?.value || "borrador";
   const bloqueoPorEstado = ESTADOS_BLOQUEO_EDICION.includes(est) && !esAdmin();
   const bloqueoPorRol = !puedeOperarCotizacion(); // consulta y tecnico: siempre bloqueado
   return bloqueoPorEstado || bloqueoPorRol;
 }
-
 function aplicarPermisosCotizacion() {
   const puede = puedeOperarCotizacion();
-
   // Oculta "+ Nueva cotización"
   const btnNueva = el("btn-nueva-cotizacion");
   if (btnNueva) btnNueva.style.display = puede ? "" : "none";
-
   // Oculta la pestaña "Pagos"
   const tabPagos = document.querySelector('.pestana[data-pestana="pagos"]');
   if (tabPagos) tabPagos.style.display = puede ? "" : "none";
-
   // Si no puede operar (consulta / tecnico): deja el modal en SOLO LECTURA total
   const modal = el("modal-cotizacion");
   if (modal) {
@@ -68,13 +64,6 @@ function aplicarPermisosCotizacion() {
       campo.disabled = !puede;
     });
   }
-}
-
-// === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
-const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
-function cotizacionBloqueada() {
-  const est = el("cotizacion-estado-comercial")?.value || "borrador";
-  return ESTADOS_BLOQUEO_EDICION.includes(est) && !esAdmin();
 }
 function aplicarBloqueoDatosCotizacion() {
   const bloq = cotizacionBloqueada();
@@ -103,14 +92,11 @@ async function cargarTecnicoAsignado(cotizacionId) {
     cont.textContent = "Técnico asignado: " + (tec?.nombre_completo || "Sin asignar");
   } catch (e) { cont.textContent = "Técnico asignado: —"; }
 }
-
 document.querySelectorAll("[data-cerrar-modal]").forEach(b => b.addEventListener("click", () => cerrarModal(b.dataset.cerrarModal)));
-
 const ETIQUETAS_COMERCIAL = { borrador:"Borrador", enviada:"Enviada", pendiente_autorizacion:"Pend. autorización", autorizada:"Autorizada", rechazada:"Rechazada", cancelada:"Cancelada", cerrada:"Cerrada" };
 const ETIQUETAS_SERVICIO = { sin_iniciar:"Sin iniciar", diagnostico:"Diagnóstico", esperando_refacciones:"Esperando refacciones", en_proceso:"En proceso", terminado:"Terminado", vehiculo_entregado:"Vehículo entregado" };
 function badgeComercial(v){ const c={borrador:"gris",enviada:"naranja",pendiente_autorizacion:"naranja",autorizada:"verde",rechazada:"rojo",cancelada:"rojo",cerrada:"gris"}; return `<span class="badge ${c[v]||"gris"}">${ETIQUETAS_COMERCIAL[v]||v}</span>`; }
 function badgeServicio(v){ return `<span class="badge azul">${ETIQUETAS_SERVICIO[v]||v}</span>`; }
-
 // ============================================================================
 // AUTENTICACIÓN
 // ============================================================================
@@ -129,7 +115,6 @@ el("form-login")?.addEventListener("submit", async (ev) => {
   await iniciarSesionExitosa(data.session);
 });
 el("btn-salir")?.addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
-
 async function iniciarSesionExitosa(session) {
   estado.usuario = session.user;
   const { data: perfil } = await sb.from("perfiles").select("*").eq("id", session.user.id).single();
@@ -145,7 +130,6 @@ async function iniciarSesionExitosa(session) {
 }
 async function verificarSesion() { const { data } = await sb.auth.getSession(); if (data.session) await iniciarSesionExitosa(data.session); }
 verificarSesion();
-
 // ============================================================================
 // NAVEGACIÓN
 // ============================================================================
@@ -159,7 +143,11 @@ document.querySelectorAll(".nav-item").forEach(item => {
     if (cargas[item.dataset.modulo]) cargas[item.dataset.modulo]();
   });
 });
-
+// Logo como botón de Home: simula un clic en el nav-item de "Inicio"
+el("btn-logo-home")?.addEventListener("click", (ev) => {
+  ev.preventDefault();
+  document.querySelector('.nav-item[data-modulo="inicio"]')?.click();
+});
 async function cargarDatosBase() {
   const [{ data: clientes }, { data: vehiculos }, { data: catalogo, error: errorCatalogo }] = await Promise.all([
     sb.from("clientes").select("*").order("nombre_completo"),
@@ -184,7 +172,6 @@ function llenarSelectCategorias() {
   const cats = (estado.catalogoMaestro || []).filter(c => c.tipo === "CATEGORIA" && c.activo);
   sel.innerHTML = `<option value="">Selecciona...</option>` + cats.map(c => `<option value="${c.codigo}">${c.nombre}</option>`).join("");
 }
-
 // ============================================================================
 // INICIO / DASHBOARD
 // ============================================================================
@@ -207,7 +194,6 @@ async function cargarInicio() {
   }
   el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0))); return `<tr><td>${c.folio}</td><td>${c.vehiculos?c.vehiculos.placa:"—"}</td><td>${c.clientes?c.clientes.nombre_completo:"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
 }
-
 // ============================================================================
 // CLIENTES
 // ============================================================================
@@ -254,7 +240,6 @@ el("form-cliente")?.addEventListener("submit", async (ev) => {
   if (error) { mostrarMensaje("mensaje-cliente", "Error al guardar: " + error.message, "error"); return; }
   cerrarModal("modal-cliente"); await cargarDatosBase(); cargarClientes();
 });
-
 // ============================================================================
 // VEHÍCULOS
 // ============================================================================
@@ -337,7 +322,6 @@ el("cat-modelo")?.addEventListener("change", async () => {
 });
 el("cat-version")?.addEventListener("change", sincronizarVehiculoDesdeCatalogo);
 el("cat-motor")?.addEventListener("change", sincronizarVehiculoDesdeCatalogo);
-
 async function verHistorialVehiculo(vehiculoId) {
   const v = estado.vehiculos.find(x => x.id === vehiculoId);
   el("titulo-historial").textContent = `Historial de ${v ? v.placa : ""}`;
@@ -367,12 +351,10 @@ async function verHistorialCliente(clienteId) {
   const { data: autosCliente } = await sb.from("vehiculos").select("*").eq("cliente_id", clienteId).order("placa");
   const autos = autosCliente || [];
   const idsAutos = autos.map(v => v.id);
-
   el("titulo-historial").textContent = `Historial de ${cli ? cli.nombre_completo : ""}`;
   el("subtitulo-historial").textContent = cli
     ? `${cli.telefono || "sin teléfono"} · ${cli.correo || "sin correo"} · ${autos.length} vehículo(s)`
     : "";
-
   let lista = [], pagosPorCot = {}, seguimientos = [];
   if (idsAutos.length) {
     const { data: cots } = await sb.from("cotizaciones").select("*, vehiculos(placa, marca, modelo)").in("vehiculo_id", idsAutos).order("fecha", { ascending: false });
@@ -387,27 +369,20 @@ async function verHistorialCliente(clienteId) {
       seguimientos = segs || [];
     }
   }
-
   const totalFact = lista.reduce((s,c)=>fixFloat(s+Number(c.total||0)),0);
   const saldoAcum = lista.reduce((s,c)=>fixFloat(s+Math.max(0,Number(c.total||0)-(pagosPorCot[c.id]||0))),0);
   const k = el("kpis-historial")?.querySelectorAll(".valor");
   if (k && k.length >= 3) { k[0].textContent = lista.length; k[1].textContent = "$"+money(totalFact); k[2].textContent = "$"+money(saldoAcum); }
-
   el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => {
     const saldo = Math.max(0, fixFloat(Number(c.total||0)-(pagosPorCot[c.id]||0)));
     const autoTxt = c.vehiculos ? `${c.vehiculos.placa} · ${c.vehiculos.marca} ${c.vehiculos.modelo}` : "—";
     return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${autoTxt}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
   }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este cliente no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
-
-  // Lista de autos del cliente (en vez de "historial de placas")
   el("lista-historial-placas").innerHTML = autos.length ? autos.map(v => `<li><strong>${v.placa}</strong> · ${v.marca} ${v.modelo} ${v.anio||""}${v.vin?" · VIN "+v.vin.slice(-6):""}</li>`).join("") : `<li>Este cliente aún no tiene vehículos registrados.</li>`;
-
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?cot.folio:""}</strong> · ${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
-
   abrirModal("modal-historial");
 }
-
 // ============================================================================
 // CATÁLOGO MAESTRO V10
 // ============================================================================
@@ -490,7 +465,6 @@ el("form-servicio")?.addEventListener("submit", async ev => {
   await cargarDatosBase();
   cargarCatalogo();
 });
-
 // ============================================================================
 // COTIZACIONES
 // ============================================================================
@@ -519,7 +493,6 @@ function aplicarFiltrosCotizaciones(listaCompleta) {
 el("buscar-cotizacion")?.addEventListener("input", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 el("filtro-estado-comercial")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
 el("filtro-estado-pago")?.addEventListener("change", () => aplicarFiltrosCotizaciones(window.__cotizacionesCache || []));
-
 document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", () => {
   document.querySelectorAll(".pestana").forEach(x => x.classList.remove("activa"));
   p.classList.add("activa");
@@ -527,7 +500,6 @@ document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", (
   actualizarGatePagos();
 }));
 el("btn-nueva-cotizacion")?.addEventListener("click", () => abrirCotizacion(null));
-
 function actualizarGatePagos() {
   const hay = !!(el("cotizacion-id") && el("cotizacion-id").value);
   const secciones = [
@@ -542,7 +514,6 @@ function actualizarGatePagos() {
     if (boton) { boton.disabled = !hay; boton.classList.toggle("btn-bloqueado", !hay); boton.title = hay ? "" : "Primero guarda la cotización"; }
   });
 }
-
 // ============================================================================
 // CLIENTE Y VEHÍCULO INLINE
 // ============================================================================
@@ -652,7 +623,6 @@ function resetInlineCotizacion() {
   el("vehiculo-existente-select").innerHTML = `<option value="">Primero elige un cliente…</option>`;
   if (el("nveh-manual")) el("nveh-manual").checked = false;
 }
-
 // ============================================================================
 // CASCADA DEL CATÁLOGO MAESTRO EN LA COTIZACIÓN
 // ============================================================================
@@ -694,7 +664,6 @@ el("btn-cat-agregar")?.addEventListener("click", async () => {
   renderConceptos();
   el("cat-cot-concepto").value = "";
 });
-
 // ============================================================================
 // COTIZACIÓN · abrir / conceptos / guardar
 // ============================================================================
@@ -712,7 +681,7 @@ async function abrirCotizacion(id) {
   estado.conceptosEnEdicion = [];
   el("tabla-pagos-cotizacion").innerHTML = ""; el("lista-seguimiento").innerHTML = ""; el("galeria-archivos").innerHTML = "";
   resetInlineCotizacion();
-
+  if (el("cotizacion-tecnico-asignado")) el("cotizacion-tecnico-asignado").textContent = "Técnico asignado: —";
   if (id) {
     const { data: c } = await sb.from("cotizaciones").select("*").eq("id", id).single();
     el("cotizacion-entrega").value = c.entrega_estimada || ""; el("cotizacion-km").value = c.kilometraje_visita || "";
@@ -737,16 +706,15 @@ async function abrirCotizacion(id) {
     estado.conceptosEnEdicion = (detalle || []).map(d => ({ ...d }));
     await cargarPagosCotizacion(id);
     await cargarSeguimientoCotizacion(id);
+    await cargarTecnicoAsignado(id);
   }
   renderConceptos();
   cargarCategoriasCotizacion();
   actualizarGatePagos();
   aplicarBloqueoDatosCotizacion();
   aplicarPermisosCotizacion();
-  await cargarTecnicoAsignado(id);
   abrirModal("modal-cotizacion");
 }
-
 function renderConceptos() {
   el("cuerpo-conceptos").innerHTML = estado.conceptosEnEdicion.map((cpt, i) => `
     <tr>
@@ -760,7 +728,6 @@ function renderConceptos() {
     </tr>`).join("");
   recalcularTotales();
 }
-
 el("cuerpo-conceptos")?.addEventListener("input", (e) => {
   const input = e.target;
   if (!input.dataset.campo) return;
@@ -770,14 +737,12 @@ el("cuerpo-conceptos")?.addEventListener("input", (e) => {
   else estado.conceptosEnEdicion[i][campo] = input.value;
   recalcularConcepto(i);
 });
-
 el("cuerpo-conceptos")?.addEventListener("click", (e) => {
   const b = e.target.closest("[data-quitar]");
   if (!b) return;
   estado.conceptosEnEdicion.splice(Number(b.dataset.quitar), 1);
   renderConceptos();
 });
-
 function recalcularConcepto(i) {
   const c = estado.conceptosEnEdicion[i];
   c.importe = Math.max(0, fixFloat((c.cantidad||0)*(c.precio_unitario||0) - (c.descuento||0)));
@@ -785,7 +750,6 @@ function recalcularConcepto(i) {
   if (celda) celda.textContent = "$" + money(c.importe);
   recalcularTotales();
 }
-
 function recalcularTotales() {
   const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
   const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
@@ -795,11 +759,9 @@ function recalcularTotales() {
   el("cotizacion-total").textContent = money(total);
 }
 el("btn-agregar-concepto")?.addEventListener("click", () => { estado.conceptosEnEdicion.push({ tipo:"servicio", descripcion:"", cantidad:1, precio_unitario:0, descuento:0, importe:0 }); renderConceptos(); });
-
 function actualizarVisibilidadPanelCierre() { el("panel-cierre").style.display = el("cotizacion-estado-comercial").value === "cerrada" ? "block" : "none"; }
 el("cotizacion-estado-comercial")?.addEventListener("change", () => { actualizarVisibilidadPanelCierre(); aplicarBloqueoDatosCotizacion(); });
 el("cotizacion-cerrar-adeudo")?.addEventListener("change", () => { el("campos-adeudo").style.display = el("cotizacion-cerrar-adeudo").checked ? "block" : "none"; });
-
 function validarReglasDeCierre(saldoActual) {
   if (el("cotizacion-estado-comercial").value !== "cerrada") return null;
   if (el("cotizacion-estado-servicio").value !== "vehiculo_entregado") return "No se puede cerrar: el estado de servicio debe ser 'Vehículo entregado'.";
@@ -809,7 +771,6 @@ function validarReglasDeCierre(saldoActual) {
   else { if (!esAdmin()) return "Cerrar con adeudo requiere autorización de un administrador."; if (!el("cotizacion-motivo-adeudo").value.trim()) return "Cerrar con adeudo requiere un motivo."; if (!el("cotizacion-fecha-compromiso").value) return "Cerrar con adeudo requiere fecha compromiso."; }
   return null;
 }
-
 el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   const modoCli = document.querySelector('input[name="modo-cliente"]:checked').value;
   const modoVeh = document.querySelector('input[name="modo-vehiculo"]:checked').value;
@@ -819,7 +780,6 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   const marca = el("nveh-manual").checked ? el("nveh-marca-manual").value.trim() : el("nveh-marca").value;
   const modelo = el("nveh-manual").checked ? el("nveh-modelo-manual").value.trim() : el("nveh-modelo").value;
   if (modoVeh === "nuevo" && (!marca || !modelo || !el("nveh-placa").value.trim())) { mostrarMensaje("mensaje-cotizacion", "El auto nuevo requiere marca, modelo y placa.", "error"); return; }
-
   const { data: resuelto, error: errR } = await sb.rpc("resolver_cliente_vehiculo", {
     p_cliente_id: modoCli === "existente" ? seleccion.clienteId : null,
     p_cli_nombre: el("ncli-nombre").value, p_cli_telefono: el("ncli-telefono").value, p_cli_correo: el("ncli-correo").value, p_cli_rfc: el("ncli-rfc").value, p_cli_direccion: el("ncli-direccion").value, p_cli_obs: el("ncli-obs").value,
@@ -830,7 +790,6 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   const clienteId = resuelto[0].cliente_id;
   const vehiculoId = resuelto[0].vehiculo_id;
   if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
-
   const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
   const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
   const total = Math.max(0, fixFloat(subtotal - descuento));
@@ -839,10 +798,8 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
   const errCierre = validarReglasDeCierre(saldoActual);
   if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
-
   const conAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
   const encabezado = { cliente_id: clienteId, vehiculo_id: vehiculoId, entrega_estimada: el("cotizacion-entrega").value || null, kilometraje_visita: el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null, observaciones: el("cotizacion-observaciones").value.trim() || null, estado_comercial: el("cotizacion-estado-comercial").value, estado_servicio: el("cotizacion-estado-servicio").value, estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"), subtotal, descuento_total: descuento, total, notas_finales: el("cotizacion-notas-finales").value.trim() || null, cerrada_con_adeudo: conAdeudo, motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null, fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null };
-
   let id = el("cotizacion-id").value;
   if (!id) {
     const { data: folio } = await sb.rpc("siguiente_folio");
@@ -862,7 +819,6 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
   await cargarDatosBase(); await cargarCotizaciones();
 });
-
 // --- Pagos ---
 async function cargarPagosCotizacion(cotizacionId) {
   const { data: pagos } = await sb.from("pagos").select("*").eq("cotizacion_id", cotizacionId).order("fecha");
@@ -884,7 +840,6 @@ el("btn-agregar-pago")?.addEventListener("click", async () => {
   el("pago-importe").value=""; el("pago-referencia").value=""; el("pago-comentario").value="";
   cargarPagosCotizacion(id);
 });
-
 // --- Seguimiento ---
 async function cargarSeguimientoCotizacion(cotizacionId) {
   const { data } = await sb.from("seguimientos").select("*").eq("cotizacion_id", cotizacionId).order("created_at", { ascending: false });
@@ -897,7 +852,6 @@ el("btn-agregar-seguimiento")?.addEventListener("click", async () => {
   await sb.from("seguimientos").insert({ cotizacion_id: id, descripcion: texto, usuario_id: estado.usuario.id, tipo: "nota" });
   el("seguimiento-texto").value = ""; cargarSeguimientoCotizacion(id);
 });
-
 // ============================================================================
 // IMPORTACIÓN MASIVA DEL CATÁLOGO MAESTRO V10 (CSV)
 // ============================================================================
@@ -943,7 +897,6 @@ async function aplicarImportacion() {
   await cargarDatosBase();
 }
 function parseCSV(texto) { return texto.trim().split(/\r?\n/).map(l => l.split(",").map(c => c.trim())); }
-
 // ============================================================================
 // ARCHIVOS ADJUNTOS
 // ============================================================================
@@ -967,7 +920,6 @@ el("btn-subir-archivo")?.addEventListener("click", async () => {
   el("archivo-input").value = ""; mostrarMensaje("mensaje-archivo", "Archivo subido correctamente.");
   cargarArchivosCotizacion(id);
 });
-
 // ============================================================================
 // PDF DE COTIZACIÓN
 // ============================================================================
@@ -976,12 +928,10 @@ el("btn-pdf-cotizacion")?.addEventListener("click", async () => {
   if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de generar el PDF.", "error"); return; }
   await generarPDFCotizacion(id);
 });
-
 // ============================================================================
 // PDF de cotización · estilo "SPEED CENTER"
 // ============================================================================
 async function generarPDFCotizacion(cotizacionId) {
-
   const EMPRESA = {
     nombre: "SPEED CENTER",
     direccion: "Cda. de Uniroyal 4, La Michoacana, 52166 San Jorge Pueblo Nuevo, México.",
@@ -991,7 +941,6 @@ async function generarPDFCotizacion(cotizacionId) {
     ivaIncluidoEnTotal: true,
     porcentajeAnticipo: 0.50   // ANTICIPO REQUERIDO = 50% del importe total
   };
-
   const TERMINOS = [
     "El tiempo de entrega del automóvil, dependerá del servicio solicitado.",
     "Las refacciones y los costos se basan en la disponibilidad actual. (Piezas nuevas garantizadas, en caso de ser originales se mencionan en la cotización).",
@@ -1005,22 +954,17 @@ async function generarPDFCotizacion(cotizacionId) {
     "Una vez notificado al cliente que el servicio ha sido terminado, cuenta con 3 días hábiles para recoger su vehículo y liquidar el servicio; de no ser así, se cobrará una pensión de $50.00 por día.",
     "ES NECESARIO LIQUIDAR AL 100% EL SERVICIO, PARA SER ENTREGADO EL VEHÍCULO."
   ];
-
   const { data: c } = await sb
     .from("cotizaciones")
     .select("*, clientes(nombre_completo, telefono, correo, rfc), vehiculos(placa, marca, modelo, anio, vin)")
     .eq("id", cotizacionId)
     .single();
   if (!c) { alert("No se encontró la cotización."); return; }
-
   const { data: detalle } = await sb
     .from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
-
   const { data: pagos } = await sb
     .from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado", "valido");
-
   const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
-
   const totalGuardado = Number(c.total || 0);
   let base, ivaMonto, importeTotal;
   if (EMPRESA.ivaIncluidoEnTotal) {
@@ -1033,19 +977,15 @@ async function generarPDFCotizacion(cotizacionId) {
     importeTotal = base + ivaMonto;
   }
   const anticipoRequerido = importeTotal * EMPRESA.porcentajeAnticipo;
-
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-
   const GRIS = [77, 77, 77];
   const NEGRO = [30, 30, 30];
   const ROJO = [200, 20, 20];
   const LINEA = [180, 180, 180];
   const PW = 612;
   const M = 40;
-
   const dinero = n => "$ " + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   async function cargarLogo(url) {
     return new Promise(resolve => {
       const img = new Image();
@@ -1062,7 +1002,6 @@ async function generarPDFCotizacion(cotizacionId) {
       img.src = url;
     });
   }
-
   const logo = await cargarLogo(EMPRESA.logo);
   let y = M;
   if (logo) {
@@ -1070,14 +1009,12 @@ async function generarPDFCotizacion(cotizacionId) {
     const lh = (logo.h / logo.w) * lw;
     doc.addImage(logo.data, "PNG", M, y, lw, Math.min(lh, 48));
   }
-
   doc.setTextColor(...ROJO); doc.setFont(undefined, "bold"); doc.setFontSize(14);
   doc.text(EMPRESA.nombre, PW - M, y + 10, { align: "right" });
   doc.setTextColor(...NEGRO); doc.setFont(undefined, "normal"); doc.setFontSize(8);
   doc.text(EMPRESA.direccion, PW - M, y + 24, { align: "right" });
   doc.text(EMPRESA.telefono, PW - M, y + 35, { align: "right" });
   y += 58;
-
   function celdaHeader(x, w, h, txt) {
     doc.setFillColor(...GRIS); doc.rect(x, y, w, h, "F");
     doc.setTextColor(255, 255, 255); doc.setFont(undefined, "bold"); doc.setFontSize(7.5);
@@ -1088,20 +1025,16 @@ async function generarPDFCotizacion(cotizacionId) {
     doc.setTextColor(...(opt.color || NEGRO)); doc.setFont(undefined, opt.bold ? "bold" : "normal"); doc.setFontSize(opt.size || 9);
     doc.text(txt || "—", x + w / 2, y + h / 2 + 3, { align: "center" });
   }
-
   const H = 16;
   const col1 = 270, col2 = 150, col3 = (PW - 2 * M) - col1 - col2;
   const x1 = M, x2 = x1 + col1, x3 = x2 + col2;
-
   celdaHeader(x1, col1, H, "NOMBRE DEL CLIENTE");
   celdaHeader(x2, col2, H, "FECHA");
   celdaHeader(x3, col3, H, "COTIZACIÓN NO.");
   y += H;
-
   const fecha = (c.fecha || "").toString();
   celdaValor(x1, col1, H, (c.clientes?.nombre_completo || "—").toUpperCase());
   celdaValor(x2, col2, H, fecha.toUpperCase());
-
   doc.setDrawColor(...LINEA); doc.rect(x3, y, col3, H * 3);
   doc.setTextColor(...ROJO); doc.setFont(undefined, "bold");
   const folioTxt = String(c.folio || "");
@@ -1110,26 +1043,21 @@ async function generarPDFCotizacion(cotizacionId) {
   while (fsFolio > 6 && doc.getTextWidth(folioTxt) > maxAnchoFolio) { fsFolio -= 0.5; doc.setFontSize(fsFolio); }
   doc.text(folioTxt, x3 + col3 / 2, y + (H * 3) / 2 + 5, { align: "center", maxWidth: maxAnchoFolio });
   y += H;
-
   celdaHeader(x1, col1, H, "PLACAS");
   celdaHeader(x2, col2, H, "AUTOMÓVIL");
   y += H;
-
   const auto = [c.vehiculos?.marca, c.vehiculos?.modelo].filter(Boolean).join(" - ").toUpperCase();
   celdaValor(x1, col1, H, (c.vehiculos?.placa || "—").toUpperCase());
   celdaValor(x2, col2, H, auto || "—");
   y += H;
-
   celdaHeader(M, PW - 2 * M, H, "COMENTARIOS");
   y += H + 8;
-
   const bodyTabla = (detalle || []).map(d => [
     String(d.cantidad || 1),
     d.descripcion || "",
     dinero(d.precio_unitario),
     dinero(d.importe)
   ]);
-
   doc.autoTable({
     startY: y,
     head: [["CANTIDAD", "DESCRIPCIÓN DEL ARTÍCULO", "IMPORTE UNITARIO", "TOTAL"]],
@@ -1145,15 +1073,12 @@ async function generarPDFCotizacion(cotizacionId) {
     },
     margin: { left: M, right: M }
   });
-
   y = doc.lastAutoTable.finalY + 14;
-
   const bh = 18;
   const etW = 105, valW = 120;
   const bloqueW = etW + valW;
   const izqX = M;
   const derX = PW - M - bloqueW;
-
   function filaTotal(x, etiqueta, valor, opt = {}) {
     doc.setFillColor(...(opt.fill || [0, 0, 0])); doc.rect(x, y, etW, bh, "F");
     doc.setTextColor(255, 255, 255); doc.setFont(undefined, "bold"); doc.setFontSize(8.5);
@@ -1162,25 +1087,20 @@ async function generarPDFCotizacion(cotizacionId) {
     doc.setTextColor(...(opt.color || NEGRO)); doc.setFont(undefined, opt.bold ? "bold" : "normal"); doc.setFontSize(9);
     doc.text(valor, x + etW + valW - 6, y + bh / 2 + 3, { align: "right" });
   }
-
   const yTot = y;
   filaTotal(izqX, "SUBTOTAL:", dinero(base));
   y += bh;
   filaTotal(izqX, `IVA (${Math.round(EMPRESA.iva * 100)}%):`, dinero(ivaMonto));
   y += bh;
   filaTotal(izqX, "ANTICIPO:", dinero(pagado));
-
   y = yTot;
   filaTotal(derX, "IMPORTE TOTAL:", dinero(importeTotal), { color: ROJO, bold: true });
   y += bh;
   filaTotal(derX, "ANTICIPO REQ.:", dinero(anticipoRequerido), { color: ROJO, bold: true });
-
   y = yTot + bh * 3 + 16;
-
   doc.setFont(undefined, "bold"); doc.setFontSize(9.5); doc.setTextColor(...NEGRO);
   doc.text("TÉRMINOS Y CONDICIONES", PW / 2, y, { align: "center" });
   y += 14;
-
   doc.setFontSize(7);
   const anchoTxt = PW - 2 * M - 14;
   TERMINOS.forEach((t, i) => {
@@ -1192,10 +1112,8 @@ async function generarPDFCotizacion(cotizacionId) {
     doc.text(lineas, M + 4, y);
     y += lineas.length * 8 + 2;
   });
-
   doc.save(`${c.folio || "cotizacion"}.pdf`);
 }
-
 // ============================================================================
 // USUARIOS
 // ============================================================================
@@ -1337,7 +1255,6 @@ el("btn-confirmar-crear-usuario")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-crear-usuario", `Usuario @${username} creado correctamente.`);
   cerrarModal("modal-crear-usuario"); await cargarUsuarios();
 });
-
 // ============================================================================
 // BITÁCORA
 // ============================================================================
@@ -1345,7 +1262,6 @@ async function cargarBitacora() {
   const { data } = await sb.from("bitacora").select("*").order("created_at", { ascending: false }).limit(100);
   el("tabla-bitacora").innerHTML = (data||[]).map(b => `<tr><td>${new Date(b.created_at).toLocaleString("es-MX")}</td><td>${b.tabla_afectada}</td><td>${b.accion}</td><td>${b.valores_nuevos?JSON.stringify(b.valores_nuevos).slice(0,120):"—"}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio-tabla">Sin actividad registrada.</td></tr>`;
 }
-
 // ============================================================================
 // CREACIÓN DE COMBOS
 // ============================================================================
