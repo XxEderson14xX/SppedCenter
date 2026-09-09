@@ -151,10 +151,10 @@ async function abrirOT(id){
   $('v9-ot-tecnico').innerHTML='<option value="">Sin asignar</option>'+(t||[]).map(x=>`<option value="${x.id}" ${x.id===o.tecnico_id?'selected':''}>${escapar(x.nombre_completo)}</option>`).join('');
   $('v9-ot-asignacion').style.display=estado.perfil?.rol==='tecnico'?'none':'block';
   $('v9-ot-trabajos').innerHTML=`<div class="v9-avance-cabecera"><div><strong>Avance del servicio</strong><div id="v9-ot-contador" class="v9-avance-contador">0 de 0 realizados</div></div><div id="v9-ot-porcentaje" class="v9-avance-porcentaje">0%</div></div><div class="v9-progreso v9-progreso-ot"><span id="v9-ot-barra" style="width:0%"></span></div><label class="v9-seleccionar-todos-contenedor"><input id="v9-seleccionar-todos" type="checkbox"><strong>Seleccionar todos los trabajos</strong></label><div class="v9-lista-trabajos">${(d||[]).map(x=>`<label class="v9-check"><input data-check="${x.id}" type="checkbox" ${x.realizado?'checked':''}><span>${escapar(x.descripcion)}</span></label>`).join('')}</div><div id="v9-finalizar-ayuda" class="v9-finalizar-ayuda"></div>`;
-  $('v9-ot-observaciones').value=o.observaciones||'';
+   $('v9-ot-observaciones').value=o.observaciones||'';
+  await cargarPiezasOT(id);
   configurarSeleccionTodosOT();configurarChecksOT();aplicarModoOT(o.estado==='terminada');aplicarPermisosOT();abrirModal('modal-v9-orden');
 }
-
 // ---- Guardado robusto (una sola función, con candado y finally) ------------
 async function guardarAvanceOT({finalizar=false} = {}) {
   if (!otId) return;
@@ -184,7 +184,7 @@ async function guardarAvanceOT({finalizar=false} = {}) {
       p_tecnico_id: $('v9-ot-tecnico')?.value || null
     });
     if (errG) { console.error('Error al guardar avance:', errG); alert(errG.message || 'No fue posible guardar el avance.'); return; }
-
+    if (puedeEditarPiezasOT()) { await guardarPiezasOT(otId); }
     // 2) Si NO es finalizar, terminamos aquí
     if (!finalizar) {
       await cargarOT();
@@ -220,7 +220,66 @@ async function guardarAvanceOT({finalizar=false} = {}) {
 
 $('v9-guardar-ot')?.addEventListener('click', () => guardarAvanceOT({ finalizar: false }));
 $('v9-finalizar-ot')?.addEventListener('click', () => guardarAvanceOT({ finalizar: true }));
+// ============================================================================
+// PIEZAS / REFACCIONES ASIGNADAS A LA OT
+// Solo Recepción/Admin agregan o quitan. El técnico solo ve la lista.
+// ============================================================================
+let otPiezas = []; // [{nombre, cantidad}]
 
+function puedeEditarPiezasOT(){ return staff(); } // administrador o recepcion
+
+async function cargarPiezasOT(ordenId){
+  otPiezas = [];
+  try{
+    const { data, error } = await sb.from('orden_trabajo_piezas').select('*').eq('orden_trabajo_id', ordenId).order('created_at');
+    if(!error && data) otPiezas = data.map(p => ({ id: p.id, nombre: p.nombre, cantidad: p.cantidad }));
+  }catch(e){ console.warn('No fue posible cargar piezas (¿tabla no existe aún?):', e); }
+  renderPiezasOT();
+}
+
+function renderPiezasOT(){
+  const tbody = $('v9-ot-piezas-lista');
+  if(!tbody) return;
+  const puede = puedeEditarPiezasOT() && !window.v9OTTerminada;
+
+  tbody.innerHTML = otPiezas.length ? otPiezas.map((p,i) => `
+    <tr>
+      <td>${escapar(p.nombre)}</td>
+      <td>${p.cantidad}</td>
+      <td>${puede ? `<button type="button" class="btn secundario pequeno" data-quitar-pieza="${i}">×</button>` : ''}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="3" class="vacio-tabla">Sin piezas asignadas.</td></tr>`;
+
+  document.querySelectorAll('[data-quitar-pieza]').forEach(b => b.onclick = () => {
+    otPiezas.splice(Number(b.dataset.quitarPieza), 1);
+    renderPiezasOT();
+  });
+
+  // El formulario de agregar solo se muestra a quien puede operar
+  const form = $('v9-ot-piezas-form');
+  if (form) form.style.display = puede ? 'flex' : 'none';
+}
+
+$('v9-pieza-agregar')?.addEventListener('click', () => {
+  if (!puedeEditarPiezasOT()) return;
+  const nombre = $('v9-pieza-nombre')?.value.trim();
+  const cantidad = Math.max(1, Math.floor(Number($('v9-pieza-cantidad')?.value || 1)));
+  if (!nombre) { alert('Escribe el nombre de la pieza.'); return; }
+  otPiezas.push({ nombre, cantidad });
+  if ($('v9-pieza-nombre')) $('v9-pieza-nombre').value = '';
+  if ($('v9-pieza-cantidad')) $('v9-pieza-cantidad').value = 1;
+  renderPiezasOT();
+});
+
+async function guardarPiezasOT(ordenId){
+  try{
+    await sb.from('orden_trabajo_piezas').delete().eq('orden_trabajo_id', ordenId);
+    if (otPiezas.length){
+      const filas = otPiezas.map(p => ({ orden_trabajo_id: ordenId, nombre: p.nombre, cantidad: p.cantidad }));
+      await sb.from('orden_trabajo_piezas').insert(filas);
+    }
+  }catch(e){ console.warn('No fue posible guardar piezas (¿tabla no existe aún?):', e); }
+}
 // ============================================================================
 // IMPRIMIR ORDEN DE TRABAJO · estilo SPEED CENTER
 // ============================================================================
@@ -287,12 +346,17 @@ $('v9-imprimir-ot')?.addEventListener('click', async () => {
   <h2>Trabajos autorizados</h2>
   <div class="avance-box"><div class="barra"><span style="width:${a.porcentaje}%"></span></div><div class="avance-txt">${a.realizados} de ${a.total} (${a.porcentaje}%)</div></div>
   ${trabajos.length ? trabajos.map(t => `<div class="trabajo">${t.done ? '☑' : '☐'} ${escapar(t.txt)}</div>`).join('') : '<div class="trabajo">Sin trabajos registrados.</div>'}
-  <h2>Refacciones / caja</h2><div class="obs">Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</div>
+ <h2>Refacciones / piezas asignadas</h2>
+  ${otPiezas.length ? `<table class="tabla-piezas-print" style="width:100%;border-collapse:collapse;margin-bottom:8px;"><thead><tr><th style="text-align:left;border-bottom:1px solid #ccc;padding:4px;">Pieza</th><th style="text-align:right;border-bottom:1px solid #ccc;padding:4px;width:70px;">Cant.</th></tr></thead><tbody>${otPiezas.map(p=>`<tr><td style="padding:4px;border-bottom:1px dashed #ddd;">${escapar(p.nombre)}</td><td style="padding:4px;border-bottom:1px dashed #ddd;text-align:right;">${p.cantidad}</td></tr>`).join('')}</tbody></table>` : '<div class="obs">Sin piezas asignadas.</div>'}
+  <div class="obs">Las piezas retiradas deberán colocarse en la caja correspondiente al vehículo.</div>
   <h2>Observaciones</h2><div class="obs">${escapar(observaciones || 'Sin observaciones.')}</div>
   <div class="firmas"><div class="firma"><div class="line"></div><small>Firma del cliente</small></div><div class="firma"><div class="line"></div><small>Firma del técnico</small></div></div>
   <div class="pie">Documento generado el ${escapar(fechaCorta(new Date().toISOString()))} · ${escapar(EMPRESA_OT.nombre)}</div>
 </body></html>`);
-  w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
+w.document.close();
+  w.onload = () => { w.focus(); w.print(); };
+  // Si el navegador no dispara onload por venir de document.write, forzamos:
+  setTimeout(() => { try { w.focus(); w.print(); } catch(e){} }, 300);
 });
 
 // carga operativa (sin ranking)
