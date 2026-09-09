@@ -92,7 +92,10 @@
 <script src="assets/app.js?v=11.1"></script>
 <div class="modal-fondo" id="modal-v9-orden"><div class="modal" style="max-width:850px"><button class="cerrar" data-cerrar-modal="modal-v9-orden">×</button><h3 id="v9-ot-titulo">Orden de trabajo</h3><div id="v9-ot-resumen"></div><div class="campo" id="v9-ot-asignacion"><label>Técnico</label><select id="v9-ot-tecnico"></select></div><h3 style="margin-top:16px">Trabajos</h3>
 <div id="v9-ot-trabajos"></div><div id="v9-ot-piezas-seccion" style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:12px;">
-  <h3 style="margin:0 0 8px;font-size:15px;">Refacciones / piezas asignadas</h3>
+<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;">
+  <h3 style="margin:0;font-size:15px;">Refacciones / piezas asignadas</h3>
+  <button type="button" class="btn secundario pequeno" id="v9-pieza-resincronizar">🔄 Sincronizar desde cotización</button>
+</div>
   <div id="v9-ot-piezas-form" style="display:flex;gap:8px;margin-bottom:10px;">
     <input type="text" id="v9-pieza-nombre" placeholder="Nombre de la pieza" style="flex:2;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
     <input type="number" id="v9-pieza-cantidad" placeholder="Cant." min="1" value="1" style="flex:0 0 80px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
