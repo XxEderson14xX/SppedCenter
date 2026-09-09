@@ -152,7 +152,7 @@ async function abrirOT(id){
   $('v9-ot-asignacion').style.display=estado.perfil?.rol==='tecnico'?'none':'block';
   $('v9-ot-trabajos').innerHTML=`<div class="v9-avance-cabecera"><div><strong>Avance del servicio</strong><div id="v9-ot-contador" class="v9-avance-contador">0 de 0 realizados</div></div><div id="v9-ot-porcentaje" class="v9-avance-porcentaje">0%</div></div><div class="v9-progreso v9-progreso-ot"><span id="v9-ot-barra" style="width:0%"></span></div><label class="v9-seleccionar-todos-contenedor"><input id="v9-seleccionar-todos" type="checkbox"><strong>Seleccionar todos los trabajos</strong></label><div class="v9-lista-trabajos">${(d||[]).map(x=>`<label class="v9-check"><input data-check="${x.id}" type="checkbox" ${x.realizado?'checked':''}><span>${escapar(x.descripcion)}</span></label>`).join('')}</div><div id="v9-finalizar-ayuda" class="v9-finalizar-ayuda"></div>`;
    $('v9-ot-observaciones').value=o.observaciones||'';
-  await cargarPiezasOT(id);
+  await cargarPiezasOT(id, o.cotizacion_id);
   configurarSeleccionTodosOT();configurarChecksOT();aplicarModoOT(o.estado==='terminada');aplicarPermisosOT();abrirModal('modal-v9-orden');
 }
 // ---- Guardado robusto (una sola función, con candado y finally) ------------
@@ -228,12 +228,43 @@ let otPiezas = []; // [{nombre, cantidad}]
 
 function puedeEditarPiezasOT(){ return staff(); } // administrador o recepcion
 
-async function cargarPiezasOT(ordenId){
+// Tipos de concepto de la cotización que SÍ son piezas físicas.
+const TIPOS_PIEZA_DESDE_COTIZACION = ['refaccion_libre', 'consumible'];
+
+async function cargarPiezasOT(ordenId, cotizacionId){
   otPiezas = [];
+  let yaTeniaPiezasGuardadas = false;
+
   try{
     const { data, error } = await sb.from('orden_trabajo_piezas').select('*').eq('orden_trabajo_id', ordenId).order('created_at');
-    if(!error && data) otPiezas = data.map(p => ({ id: p.id, nombre: p.nombre, cantidad: p.cantidad }));
+    if(!error && data && data.length){
+      otPiezas = data.map(p => ({ id: p.id, nombre: p.nombre, cantidad: p.cantidad }));
+      yaTeniaPiezasGuardadas = true;
+    }
   }catch(e){ console.warn('No fue posible cargar piezas (¿tabla no existe aún?):', e); }
+
+  // Opción A: si la OT NUNCA ha tenido piezas guardadas, las tomamos
+  // automáticamente desde los conceptos de la cotización ligada.
+  if (!yaTeniaPiezasGuardadas && cotizacionId) {
+    try {
+      const { data: detalle, error: errDet } = await sb
+        .from('detalle_cotizacion')
+        .select('descripcion, cantidad, tipo')
+        .eq('cotizacion_id', cotizacionId);
+
+      if (!errDet && detalle && detalle.length) {
+        const piezasCot = detalle
+          .filter(d => TIPOS_PIEZA_DESDE_COTIZACION.includes(d.tipo))
+          .map(d => ({ nombre: d.descripcion, cantidad: Math.max(1, Number(d.cantidad) || 1) }));
+
+        if (piezasCot.length) {
+          otPiezas = piezasCot;
+          if (puedeEditarPiezasOT()) { await guardarPiezasOT(ordenId); } // las deja guardadas de una vez
+        }
+      }
+    } catch (e) { console.warn('No fue posible sincronizar piezas desde la cotización:', e); }
+  }
+
   renderPiezasOT();
 }
 
