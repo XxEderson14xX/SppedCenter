@@ -17,6 +17,28 @@ const EMPRESA_OT = {
 
 function admin(){ return estado?.perfil?.rol === 'administrador'; }
 function staff(){ return ['administrador','recepcion'].includes(estado?.perfil?.rol); }
+function esConsultaOT(){ return estado?.perfil?.rol === 'consulta'; }
+function aplicarPermisosOT(){
+  const soloLectura = esConsultaOT();
+  const tecnico = $('v9-ot-tecnico');
+  const obs = $('v9-ot-observaciones');
+  const guardar = $('v9-guardar-ot');
+  const finalizar = $('v9-finalizar-ot');
+  const todos = $('v9-seleccionar-todos');
+  if (soloLectura) {
+    if (tecnico) tecnico.disabled = true;
+    if (obs) obs.disabled = true;
+    obtenerChecksOT().forEach(x => x.disabled = true);
+    if (todos) {
+      todos.disabled = true;
+      const c = todos.closest('.v9-seleccionar-todos-contenedor');
+      if (c) c.style.display = 'none';
+    }
+    if (guardar) guardar.style.display = 'none';
+    if (finalizar) finalizar.style.display = 'none';
+    // "Imprimir" y el botón de cerrar el modal se dejan activos (solo lectura).
+  }
+}
 function hoy(){ return new Date().toISOString().slice(0,10); }
 function texto(v, fallback='—'){ return v === null || v === undefined || v === '' ? fallback : String(v); }
 function fechaHora(v){ if(!v) return '—'; const d = new Date(v); return Number.isNaN(d.getTime()) ? texto(v) : d.toLocaleString('es-MX'); }
@@ -111,7 +133,7 @@ document.addEventListener('click',ev=>{const btn=ev.target.closest('[data-cerrar
 function obtenerChecksOT(){return [...document.querySelectorAll('[data-check]')];}
 function obtenerAvanceOT(){const checks=obtenerChecksOT();const total=checks.length;const realizados=checks.filter(x=>x.checked).length;return{total,realizados,pendientes:total-realizados,porcentaje:total?Math.round(realizados/total*100):0};}
 function actualizarAvanceOT(){const a=obtenerAvanceOT(),contador=$('v9-ot-contador'),porcentaje=$('v9-ot-porcentaje'),barra=$('v9-ot-barra'),todos=$('v9-seleccionar-todos'),finalizar=$('v9-finalizar-ot'),ayuda=$('v9-finalizar-ayuda');if(contador)contador.textContent=`${a.realizados} de ${a.total} realizados`;if(porcentaje)porcentaje.textContent=`${a.porcentaje}%`;if(barra)barra.style.width=`${a.porcentaje}%`;if(todos){todos.indeterminate=a.realizados>0&&a.realizados<a.total;todos.checked=a.total>0&&a.realizados===a.total;}if(finalizar&&!window.v9OTTerminada){const completo=a.total>0&&a.realizados===a.total;finalizar.style.opacity=completo?'1':'0.6';if(ayuda){ayuda.textContent=completo?'Todos los trabajos estan realizados. La OT puede finalizarse.':a.total?`Faltan ${a.pendientes} trabajos por completar.`:'La orden no contiene trabajos.';ayuda.style.color=completo?'#18794e':'#9a6700';}}}
-function configurarSeleccionTodosOT(){const t=$('v9-seleccionar-todos');if(!t)return;t.onchange=()=>{if(window.v9OTTerminada)return;const val=t.checked;obtenerChecksOT().forEach(c=>{c.checked=val;});actualizarAvanceOT();};}
+function c(){const t=$('v9-seleccionar-todos');if(!t)return;t.onchange=()=>{if(window.v9OTTerminada)return;const val=t.checked;obtenerChecksOT().forEach(c=>{c.checked=val;});actualizarAvanceOT();};}
 function configurarChecksOT(){obtenerChecksOT().forEach(c=>c.onchange=()=>{if(!window.v9OTTerminada)actualizarAvanceOT();});}
 function aplicarModoOT(terminada){window.v9OTTerminada=terminada;const tecnico=$('v9-ot-tecnico'),obs=$('v9-ot-observaciones'),guardar=$('v9-guardar-ot'),finalizar=$('v9-finalizar-ot'),todos=$('v9-seleccionar-todos'),visual=$('v9-ot-estado-visual');if(tecnico)tecnico.disabled=terminada;if(obs)obs.disabled=terminada;obtenerChecksOT().forEach(x=>x.disabled=terminada);if(todos){todos.disabled=terminada;const c=todos.closest('.v9-seleccionar-todos-contenedor');if(c)c.style.display=terminada?'none':'';}if(guardar)guardar.style.display=terminada?'none':'';if(finalizar)finalizar.style.display=terminada?'none':'';if(visual){visual.textContent=terminada?'TERMINADA':'ABIERTA';visual.className=`v9-ot-estado ${terminada?'v9-ot-estado-terminada':'v9-ot-estado-abierta'}`;}actualizarAvanceOT();}
 async function abrirOT(id){
@@ -130,7 +152,7 @@ async function abrirOT(id){
   $('v9-ot-asignacion').style.display=estado.perfil?.rol==='tecnico'?'none':'block';
   $('v9-ot-trabajos').innerHTML=`<div class="v9-avance-cabecera"><div><strong>Avance del servicio</strong><div id="v9-ot-contador" class="v9-avance-contador">0 de 0 realizados</div></div><div id="v9-ot-porcentaje" class="v9-avance-porcentaje">0%</div></div><div class="v9-progreso v9-progreso-ot"><span id="v9-ot-barra" style="width:0%"></span></div><label class="v9-seleccionar-todos-contenedor"><input id="v9-seleccionar-todos" type="checkbox"><strong>Seleccionar todos los trabajos</strong></label><div class="v9-lista-trabajos">${(d||[]).map(x=>`<label class="v9-check"><input data-check="${x.id}" type="checkbox" ${x.realizado?'checked':''}><span>${escapar(x.descripcion)}</span></label>`).join('')}</div><div id="v9-finalizar-ayuda" class="v9-finalizar-ayuda"></div>`;
   $('v9-ot-observaciones').value=o.observaciones||'';
-  configurarSeleccionTodosOT();configurarChecksOT();aplicarModoOT(o.estado==='terminada');abrirModal('modal-v9-orden');
+  configurarSeleccionTodosOT();configurarChecksOT();aplicarModoOT(o.estado==='terminada');aplicarPermisosOT();abrirModal('modal-v9-orden');
 }
 
 // ---- Guardado robusto (una sola función, con candado y finally) ------------
