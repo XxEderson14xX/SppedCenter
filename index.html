@@ -34,6 +34,7 @@
   <img src="assets/logo.png" alt="SpeedCenter" class="marca-logo">
   <small>Panel operativo · V11.1</small>
 </a>
+    <div class="nav-items-scroll">
     <a class="nav-item activo" data-modulo="inicio">Inicio</a>
     <a class="nav-item" data-modulo="cotizaciones">Cotizaciones</a>
     <a class="nav-item" data-modulo="ordenes">Órdenes de trabajo</a>
@@ -46,7 +47,7 @@
     <a class="nav-item" data-admin-only data-modulo="importacion">Importación masiva</a>
     <a class="nav-item" data-admin-only data-modulo="usuarios">Usuarios</a>
     <a class="nav-item" data-admin-only data-modulo="bitacora">Bitácora</a>
-    <div class="pie"><div id="pie-usuario">—</div><div id="pie-rol">—</div><button id="btn-salir">Cerrar sesión</button></div>
+    <div class="pie"><div id="pie-usuario">—</div></div><div id="pie-rol">—</div><button id="btn-salir">Cerrar sesión</button></div>
   </nav>
   <main id="contenido">
     <section class="modulo activo" id="modulo-inicio"><div class="encabezado-modulo"><div><h2>Panel operativo</h2><p>Vista general del taller</p></div></div><div class="kpis" id="kpis-inicio"><div class="kpi"><div class="valor">—</div><div class="etiqueta">Cotizaciones abiertas</div></div><div class="kpi acento-naranja"><div class="valor">—</div><div class="etiqueta">Pendientes de autorización</div></div><div class="kpi acento-verde"><div class="valor">—</div><div class="etiqueta">En proceso</div></div><div class="kpi acento-navy"><div class="valor">—</div><div class="etiqueta">Con saldo pendiente</div></div></div><div class="panel"><h3>Operación de hoy</h3><div class="kpis"><div class="kpi"><div class="valor" id="dash-ot-abiertas">0</div><div class="etiqueta">Órdenes abiertas</div></div><div class="kpi acento-naranja"><div class="valor" id="dash-trabajos-pendientes">0</div><div class="etiqueta">Trabajos pendientes</div></div><div class="kpi acento-verde"><div class="valor" id="dash-ot-terminadas">0</div><div class="etiqueta">Órdenes terminadas hoy</div></div><div class="kpi acento-navy"><div class="valor" id="dash-ingresos-hoy">$0.00</div><div class="etiqueta">Ingresos hoy</div></div></div><h3>Avance</h3><div id="dash-avance-ordenes"></div><h3 style="margin-top:18px;">Herramienta especial</h3><div id="dash-herramientas"></div><h3 style="margin-top:18px;">Últimos pagos</h3><div id="dash-pagos"></div></div><div class="panel"><h3>Actividad reciente</h3><table class="tabla"><thead><tr><th>Folio</th><th>Placa</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="tabla-actividad-reciente"><tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr></tbody></table></div></section>
