@@ -215,8 +215,12 @@ async function cargarClientes(filtro = "") {
   const { data } = await sb.from("clientes").select("*, vehiculos(id)").order("nombre_completo");
   let lista = data || [];
   if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(c => (c.nombre_completo||"").toLowerCase().includes(f) || (c.telefono||"").includes(f) || (c.correo||"").toLowerCase().includes(f)); }
-  el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${c.nombre_completo}</td><td>${c.telefono||"—"}</td><td>${c.correo||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>${puedeEscribir()?`<button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button>`:""}</td></tr>`).join("") : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.</td></tr>`;
+  el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${c.nombre_completo}</td><td>${c.telefono||"—"}</td><td>${c.correo||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>
+    <button class="btn secundario pequeno" data-historial-cliente="${c.id}">Historial</button>
+    ${puedeEscribir()?` <button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button>`:""}
+  </td></tr>`).join("") : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.</td></tr>`;
   document.querySelectorAll("[data-editar-cliente]").forEach(b => b.addEventListener("click", () => abrirModalCliente(lista.find(c => c.id === b.dataset.editarCliente))));
+  document.querySelectorAll("[data-historial-cliente]").forEach(b => b.addEventListener("click", () => verHistorialCliente(b.dataset.historialCliente)));
 }
 el("buscar-cliente")?.addEventListener("input", (e) => cargarClientes(e.target.value));
 el("btn-nuevo-cliente")?.addEventListener("click", () => abrirModalCliente(null));
@@ -356,6 +360,51 @@ async function verHistorialVehiculo(vehiculoId) {
   const { data: placas } = await sb.from("placas_historial").select("*").eq("vehiculo_id", vehiculoId).order("desde", { ascending: false });
   el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${p.placa}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?cot.folio:""}</strong> · ${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
+  abrirModal("modal-historial");
+}
+async function verHistorialCliente(clienteId) {
+  const cli = estado.clientes.find(x => x.id === clienteId);
+  const { data: autosCliente } = await sb.from("vehiculos").select("*").eq("cliente_id", clienteId).order("placa");
+  const autos = autosCliente || [];
+  const idsAutos = autos.map(v => v.id);
+
+  el("titulo-historial").textContent = `Historial de ${cli ? cli.nombre_completo : ""}`;
+  el("subtitulo-historial").textContent = cli
+    ? `${cli.telefono || "sin teléfono"} · ${cli.correo || "sin correo"} · ${autos.length} vehículo(s)`
+    : "";
+
+  let lista = [], pagosPorCot = {}, seguimientos = [];
+  if (idsAutos.length) {
+    const { data: cots } = await sb.from("cotizaciones").select("*, vehiculos(placa, marca, modelo)").in("vehiculo_id", idsAutos).order("fecha", { ascending: false });
+    lista = cots || [];
+    const ids = lista.map(c => c.id);
+    if (ids.length) {
+      const [{ data: pagos }, { data: segs }] = await Promise.all([
+        sb.from("pagos").select("*").in("cotizacion_id", ids).eq("estado","valido"),
+        sb.from("seguimientos").select("*").in("cotizacion_id", ids).order("created_at", { ascending: false })
+      ]);
+      (pagos||[]).forEach(p => { pagosPorCot[p.cotizacion_id] = fixFloat((pagosPorCot[p.cotizacion_id]||0) + Number(p.importe)); });
+      seguimientos = segs || [];
+    }
+  }
+
+  const totalFact = lista.reduce((s,c)=>fixFloat(s+Number(c.total||0)),0);
+  const saldoAcum = lista.reduce((s,c)=>fixFloat(s+Math.max(0,Number(c.total||0)-(pagosPorCot[c.id]||0))),0);
+  const k = el("kpis-historial")?.querySelectorAll(".valor");
+  if (k && k.length >= 3) { k[0].textContent = lista.length; k[1].textContent = "$"+money(totalFact); k[2].textContent = "$"+money(saldoAcum); }
+
+  el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => {
+    const saldo = Math.max(0, fixFloat(Number(c.total||0)-(pagosPorCot[c.id]||0)));
+    const autoTxt = c.vehiculos ? `${c.vehiculos.placa} · ${c.vehiculos.marca} ${c.vehiculos.modelo}` : "—";
+    return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${autoTxt}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este cliente no tiene cotizaciones.</td></tr>`;
+  document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
+
+  // Lista de autos del cliente (en vez de "historial de placas")
+  el("lista-historial-placas").innerHTML = autos.length ? autos.map(v => `<li><strong>${v.placa}</strong> · ${v.marca} ${v.modelo} ${v.anio||""}${v.vin?" · VIN "+v.vin.slice(-6):""}</li>`).join("") : `<li>Este cliente aún no tiene vehículos registrados.</li>`;
+
+  el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?cot.folio:""}</strong> · ${s.descripcion}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
+
   abrirModal("modal-historial");
 }
 
