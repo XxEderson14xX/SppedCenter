@@ -69,7 +69,7 @@ a { color:var(--teal); }
 .pie #pie-usuario { color:#fff; font-weight:600; font-size:13px; }
 #btn-salir { margin-top:10px; width:100%; padding:8px; background:rgba(255,255,255,.1); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; }
 #btn-salir:hover { background:rgba(255,255,255,.2); }
-#contenido { margin-left:250px; flex:1; padding:26px 32px; max-width:100%; }
+#contenido { margin-left:250px; flex:1; padding:26px 32px; max-width:100%; overflow-x:hidden; }
 /* -------------------- MÓDULOS -------------------- */
 .modulo { display:none; }
 .modulo.activo { display:block; }
