@@ -42,7 +42,7 @@ a { color:var(--teal); }
 /* -------------------- SHELL -------------------- */
 #app-shell { display:none; min-height:100vh; }
 #app-shell.activo { display:flex; }
-#nav-lateral { width:250px; background:var(--navy); color:#cdd6e0; height:100vh; max-height:100vh; display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; overflow:hidden; }
+#nav-lateral { width:250px; background:var(--navy); color:#cdd6e0; height:100vh; max-height:100vh; display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; overflow:hidden; z-index:50; }
 .marca { display:block; padding:18px 20px; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.1); transition:opacity .15s ease; }
 .marca { flex-shrink:0; }
 .marca:hover { opacity:.85; }
@@ -69,7 +69,7 @@ a { color:var(--teal); }
 .pie #pie-usuario { color:#fff; font-weight:600; font-size:13px; }
 #btn-salir { margin-top:10px; width:100%; padding:8px; background:rgba(255,255,255,.1); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; }
 #btn-salir:hover { background:rgba(255,255,255,.2); }
-#contenido { margin-left:250px; flex:1; padding:26px 32px; max-width:100%; overflow-x:hidden; }
+#contenido { margin-left:250px; flex:1; padding:26px 32px; max-width:100%; overflow-x:hidden; min-width:0; }
 /* -------------------- MÓDULOS -------------------- */
 .modulo { display:none; }
 .modulo.activo { display:block; }
