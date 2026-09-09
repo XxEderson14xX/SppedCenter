@@ -267,6 +267,32 @@ async function cargarPiezasOT(ordenId, cotizacionId){
 
   renderPiezasOT();
 }
+  $('v9-pieza-resincronizar')?.addEventListener('click', async () => {
+  if (!puedeEditarPiezasOT()) return;
+  if (!otId) return;
+  const { data: ot } = await sb.from('ordenes_trabajo').select('cotizacion_id').eq('id', otId).single();
+  const cotizacionId = ot?.cotizacion_id;
+  if (!cotizacionId) { alert('Esta orden no tiene una cotización ligada.'); return; }
+
+  const { data: detalle, error: errDet } = await sb
+    .from('detalle_cotizacion')
+    .select('descripcion, cantidad, tipo')
+    .eq('cotizacion_id', cotizacionId);
+
+  if (errDet) { alert('No fue posible leer los conceptos de la cotización.'); return; }
+
+  const piezasCot = (detalle || [])
+    .filter(d => TIPOS_PIEZA_DESDE_COTIZACION.includes(d.tipo))
+    .map(d => ({ nombre: d.descripcion, cantidad: Math.max(1, Number(d.cantidad) || 1) }));
+
+  if (!confirm(`Esto reemplazará la lista actual de piezas por las ${piezasCot.length} pieza(s) que hay en la cotización.\n\n¿Deseas continuar?`)) return;
+
+  otPiezas = piezasCot;
+  renderPiezasOT();
+  await guardarPiezasOT(otId);
+  alert('Piezas sincronizadas desde la cotización.');
+});
+
 
 function renderPiezasOT(){
   const tbody = $('v9-ot-piezas-lista');
