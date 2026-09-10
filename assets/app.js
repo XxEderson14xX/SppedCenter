@@ -296,6 +296,11 @@ function abrirModalVehiculo(v) {
   el("vehiculo-combustible").value = v ? v.combustible || "" : "";
   el("vehiculo-color").value = v ? v.color || "" : "";
   el("vehiculo-km").value = v ? v.kilometraje_actual || "" : "";
+
+  // El kilometraje se actualiza SOLO desde las cotizaciones. Aquí queda
+  // bloqueado, salvo para el Administrador (por si hay que corregir algo).
+  if (el("vehiculo-km")) el("vehiculo-km").disabled = !esAdmin();
+
   cargarAniosCatalogo();
   if (el("cat-manual")) el("cat-manual").checked = false;
   abrirModal("modal-vehiculo");
@@ -827,6 +832,22 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
   const errCierre = validarReglasDeCierre(saldoActual);
   if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
+   // === Validación de kilometraje sincronizado con el vehículo ===
+  const kmVisitaNum = el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null;
+  if (kmVisitaNum !== null && vehiculoId) {
+    const { data: resKm, error: errKm } = await sb.rpc("validar_y_actualizar_km_vehiculo", {
+      p_vehiculo_id: vehiculoId,
+      p_km_nuevo: kmVisitaNum
+    });
+    if (errKm) {
+      mostrarMensaje("mensaje-cotizacion", "Error al validar kilometraje: " + errKm.message, "error");
+      return;
+    }
+    if (resKm && resKm.ok === false) {
+      mostrarMensaje("mensaje-cotizacion", resKm.motivo || "El kilometraje capturado no es válido.", "error");
+      return;
+    }
+  }
   const conAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
   const encabezado = { cliente_id: clienteId, vehiculo_id: vehiculoId, entrega_estimada: el("cotizacion-entrega").value || null, kilometraje_visita: el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null, observaciones: el("cotizacion-observaciones").value.trim() || null, estado_comercial: el("cotizacion-estado-comercial").value, estado_servicio: el("cotizacion-estado-servicio").value, estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"), subtotal, descuento_total: descuento, total, notas_finales: el("cotizacion-notas-finales").value.trim() || null, cerrada_con_adeudo: conAdeudo, motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null, fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null };
   let id = el("cotizacion-id").value;
