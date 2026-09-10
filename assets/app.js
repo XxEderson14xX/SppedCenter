@@ -3,6 +3,7 @@
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
 // + V8 (cascada de catálogo maestro + combos) + V10 (Catálogo Maestro)
 // + V11.1 (PDF estilo Speed Center: folio auto-ajuste, totales separados, anticipo 50%)
+// + V11.5 (restricción de menú y redirección directa para el rol técnico)
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const estado = {
@@ -125,8 +126,28 @@ async function iniciarSesionExitosa(session) {
   el("pie-rol").textContent = perfil ? `Rol: ${perfil.rol}` : "";
   if (perfil && perfil.rol === "administrador") document.querySelectorAll("[data-admin-only]").forEach(n => n.style.display = "block");
   if (perfil && perfil.rol === "consulta") document.querySelectorAll(".solo-staff").forEach(n => n.style.display = "none");
+
+  // === V11.5: Restricción de menú para el rol "tecnico" ===
+  // Solo puede ver "Órdenes de trabajo". Todo lo demás del menú se oculta.
+  if (perfil && perfil.rol === "tecnico") {
+    document.querySelectorAll(".nav-item").forEach(n => {
+      if (n.dataset.modulo !== "ordenes") n.style.display = "none";
+    });
+  }
+
   await cargarDatosBase();
-  cargarInicio();
+
+  // El técnico entra directo a "Órdenes de trabajo"; los demás roles a Inicio.
+  if (perfil && perfil.rol === "tecnico") {
+    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("activo"));
+    document.querySelectorAll(".modulo").forEach(m => m.classList.remove("activo"));
+    const navOrdenes = document.querySelector('.nav-item[data-modulo="ordenes"]');
+    if (navOrdenes) navOrdenes.classList.add("activo");
+    el("modulo-ordenes")?.classList.add("activo");
+    if (typeof cargarOT === "function") cargarOT();
+  } else {
+    cargarInicio();
+  }
 }
 async function verificarSesion() { const { data } = await sb.auth.getSession(); if (data.session) await iniciarSesionExitosa(data.session); }
 verificarSesion();
@@ -440,7 +461,7 @@ function abrirModalServicio(s) {
   el("servicio-codigo").value = s ? s.codigo : "";
   el("servicio-codigo").readOnly = !!s;
   el("servicio-nombre").value = s ? s.nombre : "";
-  el("servicio-tipo").value = s ? s.tipo : "CONCEPTO_SERVICIO";
+  if (el("servicio-tipo")) el("servicio-tipo").value = s ? s.tipo : "CONCEPTO_SERVICIO";
   el("servicio-categoria").value = s ? (s.categoria_codigo || "") : "";
   el("servicio-estado").value = s && !s.activo ? "inactivo" : "activo";
   el("servicio-descripcion").value = s ? (s.nombre || "") : "";
@@ -454,7 +475,7 @@ el("form-servicio")?.addEventListener("submit", async ev => {
     p_codigo_original: codigoOriginal,
     p_codigo: el("servicio-codigo").value.trim().toUpperCase(),
     p_nombre: el("servicio-nombre").value.trim(),
-    p_tipo: el("servicio-tipo").value,
+    p_tipo: el("servicio-tipo") ? el("servicio-tipo").value : "CONCEPTO_SERVICIO",
     p_categoria_codigo: el("servicio-categoria").value || null,
     p_activo: el("servicio-estado").value === "activo"
   };
