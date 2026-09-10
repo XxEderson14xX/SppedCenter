@@ -740,8 +740,8 @@ async function abrirCotizacion(id) {
   renderConceptos();
   cargarCategoriasCotizacion();
   actualizarGatePagos();
-  aplicarBloqueoDatosCotizacion();
   aplicarPermisosCotizacion();
+  aplicarBloqueoDatosCotizacion();
   abrirModal("modal-cotizacion");
 }
 function renderConceptos() {
