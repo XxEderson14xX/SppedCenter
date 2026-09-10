@@ -41,11 +41,19 @@ function puedeOperarCotizacion() {
 // === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
 const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
 function cotizacionBloqueada() {
-  const est = el("cotizacion-estado-comercial")?.value || "borrador";
-  const bloqueoPorEstado = ESTADOS_BLOQUEO_EDICION.includes(est) && !esAdmin();
-  const bloqueoPorRol = !puedeOperarCotizacion(); // consulta y tecnico: siempre bloqueado
-  return bloqueoPorEstado || bloqueoPorRol;
+  // Bloqueo PERMANENTE: en cuanto la cotización ya existe (tiene id/folio
+  // guardado), cliente/vehículo/km quedan bloqueados para siempre, sin
+  // importar el estado comercial. Solo el Administrador puede editarlos.
+  const yaExiste = !!(el("cotizacion-id")?.value);
+  const bloqueoPorExistir = yaExiste && !esAdmin();
+
+  // Se mantiene también el bloqueo por rol (consulta y técnico: siempre
+  // bloqueado, incluso en una cotización nueva).
+  const bloqueoPorRol = !puedeOperarCotizacion();
+
+  return bloqueoPorExistir || bloqueoPorRol;
 }
+
 function aplicarPermisosCotizacion() {
   const puede = puedeOperarCotizacion();
   // Oculta "+ Nueva cotización"
