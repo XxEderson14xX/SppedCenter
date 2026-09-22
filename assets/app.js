@@ -1552,3 +1552,42 @@ document.addEventListener("DOMContentLoaded", () => {
     evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
   });
 });
+
+
+// === V11.9.3: Validación y UI de contraseñas ===
+function evaluarPassword(valor, ids) {
+  const tieneLen = valor.length >= 8;
+  const tieneMin = /[a-z]/.test(valor);
+  const tieneMay = /[A-Z]/.test(valor);
+  const tieneNum = /[0-9]/.test(valor);
+  const setReq = (id, valido, texto) => {
+    const elReq = document.getElementById(id);
+    if (!elReq) return;
+    elReq.className = valido ? "req-item valido" : "req-item invalido";
+    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;
+  };
+  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");
+  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");
+  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");
+  setReq(ids.num, tieneNum, "Un número (0-9)");
+  return tieneLen && tieneMin && tieneMay && tieneNum;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const passEdit = document.getElementById("usuario-password");
+  const passReqEdit = document.getElementById("password-req-editar");
+  if (passEdit && passReqEdit) {
+    passEdit.addEventListener("input", () => {
+      const val = passEdit.value;
+      evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });
+    });
+  }
+
+  const passNuevo = document.getElementById("nuevo-password");
+  const passReqCrear = document.getElementById("password-req-crear");
+  if (passNuevo && passReqCrear) {
+    passNuevo.addEventListener("input", () => {
+      evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
+    });
+  }
+});

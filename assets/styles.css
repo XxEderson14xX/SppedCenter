@@ -203,3 +203,32 @@ a { color:var(--teal); }
 .requisitos-password { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }
 .req-item { display: inline-flex; align-items: center; gap: 4px; color: var(--text-mute); transition: all 0.15s ease; }
 .req-item.valido { color: var(--green); font-weight: 600; }
+
+/* Requisitos dinámicos v11.9.3 - Diseño alineado */
+.requisitos-password {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-top: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.req-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-mute);
+  transition: all 0.15s ease;
+}
+.req-item.valido {
+  color: #16a34a;
+  font-weight: 600;
+}
+.req-item.invalido {
+  color: #dc2626;
+}
