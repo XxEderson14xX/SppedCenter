@@ -23,25 +23,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Ajustar diseño y placeholders v11.9.4
+      - name: Reparar diseño limpio y estructurado v11.9.5
         run: |
           cat << 'EOF' > update_script.js
           const fs = require("fs");
 
-          // 1. Actualizar index.html (versión v11.9.4 y placeholders limpios)
+          // 1. Leer index.html y actualizar versión
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.4");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.5");
           html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
           fs.writeFileSync("index.html", html);
 
-          // 2. Aplicar estilos CSS perfectamente alineados
+          // 2. CSS ordenado y limpio para los requisitos
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("v11.9.4")) {
-            css += '\n\n/* v11.9.4 - Estilos de validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 8px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 6px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--text-mute);\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
+          if (!css.includes("v11.9.5")) {
+            css += '\n\n/* v11.9.5 - Estilos limpios para validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 10px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 8px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: #64748b;\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          console.log("Actualización aplicada correctamente.");
+          console.log("Script ejecutado correctamente.");
           EOF
           node update_script.js
           rm update_script.js
@@ -49,5 +49,5 @@ jobs:
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "style(ui): Ajustes limpios de diseño y texto de contraseña v11.9.4"
+          commit_message: "style(ui): Corrección definitiva de diseño y estilos de contraseña v11.9.5"
           branch: main
