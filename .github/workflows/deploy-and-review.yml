@@ -1,0 +1,21 @@
+name: Gemini AI Auto-Update & Deploy
+
+on:
+  push:
+    branches:
+      - main
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Aquí va el paso que procesa la petición de Gemini cuando se abre un Issue
