@@ -1,7 +1,8 @@
 /* ============================================================================
-   Sistema SpeedCenter · styles.css · Versión V11.3
+   Sistema SpeedCenter · styles.css · Versión V11.8
    Base + badges + inline (V6) + gate pagos/botón peligro (V7) +
-   cascada de catálogo y homologación visual (V8) + Branding SpeedCenter (V11.3).
+   cascada de catálogo y homologación visual (V8) + Branding SpeedCenter (V11.3) +
+   V11.8 (iconos de menú, tendencias de KPI, skeleton loaders, encabezados fijos).
    ============================================================================ */
 :root {
   /* Identidad SpeedCenter */
@@ -9,19 +10,16 @@
   --navy-2:#2B2727;       /* variante un poco más clara (hover sobre oscuro) */
   --teal:#D32F2F;         /* Rojo SpeedCenter · botones principales / acento activo */
   --teal-2:#B71C1C;       /* rojo un poco más oscuro (hover del botón principal) */
-
   --bg:#F4F6F8;           /* Fondo de trabajo (gris niebla, descansa la vista) */
   --panel:#fff;
   --border:#e2e8f0;
   --text:#1e2833;
   --text-mute:#6b7480;
-
   --green:#2f8f5f;        /* Badges de estado (sin tocar) */
   --red:#C0392B;          /* Alertas de error (distinto al rojo de marca D32F2F) */
   --orange:#d98c00;
   --azul:#1b6f7a;         /* se conserva para usos existentes de "azul" en badges */
   --gris:#6b7480;
-
   --racing-stripe:#D32F2F; /* franja de acento en encabezados de panel */
   --sombra:0 1px 3px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.08);
 }
@@ -49,11 +47,9 @@ a { color:var(--teal); }
 .marca-logo { max-width:100%; height:auto; display:block; }
 .marca small { display:block; font-size:11px; font-weight:400; color:#9fb0c4; margin-top:6px; }
 .nav-item { padding:13px 20px; cursor:pointer; font-size:14px; color:#cdd6e0; border-left:3px solid transparent; text-decoration:none; display:block; }
+/* === V11.8: icono a la izquierda de cada módulo del menú === */
+.nav-icono { display:inline-block; width:20px; margin-right:8px; text-align:center; }
 #nav-lateral { overflow:hidden; }
-#nav-lateral > .nav-item:first-of-type ~ .nav-item,
-#nav-lateral > .nav-item:first-of-type {
-  /* marcador para claridad; el contenedor real de scroll se define abajo */
-}
 .nav-item:hover { background:rgba(255,255,255,.06); color:#fff; }
 .nav-item.activo { background:var(--teal); color:#fff; border-left-color:#fff; }
 .nav-items-scroll {
@@ -84,6 +80,11 @@ a { color:var(--teal); }
 .kpi.acento-naranja { border-left-color:var(--orange); }
 .kpi.acento-verde { border-left-color:var(--green); }
 .kpi.acento-navy { border-left-color:var(--navy); }
+/* === V11.8: tendencia (▲/▼) debajo del valor de un KPI === */
+.kpi .tendencia { font-size:11.5px; margin-top:6px; min-height:14px; }
+.tendencia-arriba { color:var(--green); font-weight:600; }
+.tendencia-abajo { color:var(--red); font-weight:600; }
+.tendencia-mute { color:var(--text-mute); }
 /* -------------------- PANELES Y TABLAS -------------------- */
 .panel { position:relative; background:var(--panel); border-radius:12px; padding:20px; box-shadow:var(--sombra); margin-bottom:20px; }
 .panel::before {
@@ -95,10 +96,15 @@ a { color:var(--teal); }
 }
 .panel h3 { font-size:16px; margin-bottom:14px; }
 .tabla { width:100%; border-collapse:collapse; font-size:13.5px; }
-.tabla thead th { text-align:left; padding:10px 12px; color:var(--text-mute); font-weight:600; border-bottom:2px solid var(--border); font-size:12.5px; text-transform:uppercase; letter-spacing:.3px; }
+/* === V11.8: encabezado de tabla fijo al hacer scroll en tablas largas === */
+.tabla thead th { position:sticky; top:0; z-index:2; text-align:left; padding:10px 12px; color:var(--text-mute); font-weight:600; border-bottom:2px solid var(--border); font-size:12.5px; text-transform:uppercase; letter-spacing:.3px; background:var(--panel); box-shadow:0 1px 0 var(--border); }
 .tabla tbody td { padding:11px 12px; border-bottom:1px solid var(--border); }
 .tabla tbody tr:hover { background:#f8fafb; }
 .vacio-tabla { text-align:center; color:var(--text-mute); padding:24px !important; font-style:italic; }
+/* === V11.8: skeleton loader (barras grises pulsantes mientras carga) === */
+.fila-skeleton td { padding:14px 12px; }
+.skeleton-bar { height:12px; border-radius:6px; background:linear-gradient(90deg,#eef1f4 25%,#e2e8f0 37%,#eef1f4 63%); background-size:400% 100%; animation:skeleton-loading 1.4s ease infinite; }
+@keyframes skeleton-loading { 0%{background-position:100% 50%;} 100%{background-position:0% 50%;} }
 /* -------------------- BARRA DE ACCIONES -------------------- */
 .barra-acciones { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
 .barra-acciones input[type="search"], .barra-acciones select { padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; background:#fff; }

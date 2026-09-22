@@ -1,8 +1,12 @@
 // ============================================================================
-// Sistema Taller Automotriz · assets/v9.js · V11.6
+// Sistema Taller Automotriz · assets/v9.js · V11.8
 // OT robusta (guardar/finalizar sin cuelgues) + Orden estilo SPEED CENTER
 // + Herramienta especial (identificador + historial) + Piezas asignadas
 // + V11.6: Impresión de la OT SIN datos del cliente (nombre/teléfono)
+// + V11.7: Adicionales autorizados SIN emoji, con marcador limpio "codigo=ADICIONAL"
+//          para que app.js los separe en su propia mini-sección (pantalla y PDF).
+// + V11.8: tendencia de Ingresos hoy vs. ayer, estados vacíos con contexto,
+//          skeleton loaders en Órdenes y Herramienta especial.
 // ============================================================================
 (() => {
 const $ = id => document.getElementById(id);
@@ -39,6 +43,7 @@ function aplicarPermisosOT(){
   }
 }
 function hoy(){ return new Date().toISOString().slice(0,10); }
+function ayer(){ const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
 function texto(v, fallback='—'){ return v === null || v === undefined || v === '' ? fallback : String(v); }
 function fechaHora(v){ if(!v) return '—'; const d = new Date(v); return Number.isNaN(d.getTime()) ? texto(v) : d.toLocaleString('es-MX'); }
 function fechaCorta(v){ if(!v) return '—'; const d = new Date(v); return Number.isNaN(d.getTime()) ? texto(v) : d.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }); }
@@ -74,6 +79,31 @@ async function dashboard(){
   if($('dash-avance-ordenes'))$('dash-avance-ordenes').innerHTML=(data.ordenes||[]).map(o=>`<div><strong>${escapar(o.folio)}</strong> · ${escapar(o.placa)} · ${o.realizados}/${o.total}<div class="v9-progreso"><span style="width:${o.total?o.realizados/o.total*100:0}%"></span></div></div>`).join('')||'<small>Sin órdenes abiertas.</small>';
   if($('dash-herramientas'))$('dash-herramientas').textContent=`Disponibles ${data.herramientas_disponibles||0} · Prestadas ${data.herramientas_prestadas||0} · Fuera de servicio ${data.herramientas_fuera||0}`;
   if($('dash-pagos'))$('dash-pagos').innerHTML=(data.ultimos_pagos||[]).map(p=>`<div>${escapar(p.folio)} · $${money(p.importe)} · ${escapar(p.metodo)}</div>`).join('')||'<small>Sin pagos hoy.</small>';
+  // === V11.8: tendencia de Ingresos hoy vs. ayer ===
+  // Se calcula con la misma función RPC "ingresos_por_dia" que ya existe
+  // (usada también en el módulo de Ingresos), solo se compara el total
+  // válido de hoy contra el de ayer. Dato real, sin inventar nada.
+  const tendenciaIng = $('dash-ingresos-tendencia');
+  if (tendenciaIng) {
+    try {
+      const [{ data: hoyData }, { data: ayerData }] = await Promise.all([
+        sb.rpc('ingresos_por_dia', { p_fecha: hoy() }),
+        sb.rpc('ingresos_por_dia', { p_fecha: ayer() })
+      ]);
+      const sumaValidos = (arr) => (arr||[]).filter(x=>x.estado==='valido').reduce((s,x)=>s+Number(x.importe),0);
+      const totalHoy = sumaValidos(hoyData);
+      const totalAyer = sumaValidos(ayerData);
+      if (totalHoy === 0 && totalAyer === 0) {
+        tendenciaIng.innerHTML = '';
+      } else if (totalHoy > totalAyer) {
+        tendenciaIng.innerHTML = `<span class="tendencia-arriba">▲ vs. ayer</span> <span class="tendencia-mute">(ayer: $${money(totalAyer)})</span>`;
+      } else if (totalHoy < totalAyer) {
+        tendenciaIng.innerHTML = `<span class="tendencia-abajo">▼ vs. ayer</span> <span class="tendencia-mute">(ayer: $${money(totalAyer)})</span>`;
+      } else {
+        tendenciaIng.innerHTML = `<span class="tendencia-mute">= igual que ayer</span>`;
+      }
+    } catch (e) { console.warn('No fue posible calcular la tendencia de ingresos:', e); }
+  }
 }
 function calcDesc(){
   const tipo=document.querySelector('input[name="v9-desc-tipo"]:checked')?.value||'ninguno';
@@ -141,30 +171,47 @@ async function adicionales(){
     if(error){ alert('No fue posible autorizar el adicional: ' + error.message); return; }
 
     if (adicional) {
+      // === V11.7: SIN emoji en la descripción. Se identifica con el marcador
+      // limpio "codigo: 'ADICIONAL'" para que app.js lo muestre en su propia
+      // mini-sección (tanto en pantalla como en el PDF), sin confundirlo con
+      // los conceptos originales de la cotización.
       estado.conceptosEnEdicion.push({
         tipo: tipoElegido,
-        descripcion: `🔧 Adicional autorizado: ${adicional.descripcion}`,
+        descripcion: adicional.descripcion,
+        codigo: 'ADICIONAL',
         cantidad: adicional.cantidad || 1,
         precio_unitario: adicional.precio_unitario || 0,
         descuento: 0,
         importe: fixFloat((adicional.cantidad||1) * (adicional.precio_unitario||0))
       });
       renderConceptos();
-      mostrarMensaje('mensaje-cotizacion', 'El adicional se agregó a Conceptos. No olvides dar clic en "Guardar cotización" para que quede registrado en el total y el PDF.', 'ok');
+      mostrarMensaje('mensaje-cotizacion', 'El adicional se agregó en la sección "Adicionales autorizados". No olvides dar clic en "Guardar cotización" para que quede registrado en el total y el PDF.', 'ok');
     }
     adicionales();
   });
 
   document.querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{await sb.rpc('resolver_adicional',{p_adicional_id:b.dataset.n,p_estado:'no_autorizado'});adicionales();});
 }
-
 $('btn-v9-adicional')?.addEventListener('click',()=>abrirModal('modal-v9-adicional'));
 $('v9-guardar-adicional')?.addEventListener('click',async()=>{
   const {error}=await sb.from('cotizacion_adicionales').insert({cotizacion_id:$('cotizacion-id').value,descripcion:$('v9-ad-desc').value.trim(),cantidad:Number($('v9-ad-cant').value||1),precio_unitario:Number($('v9-ad-precio').value||0),observacion:$('v9-ad-obs').value.trim()||null,created_by:estado.usuario.id});
   if(!error){cerrarModal('modal-v9-adicional');adicionales();}
 });
-async function cargarOT(){let q=sb.rpc('ordenes_trabajo_listar');const {data}=await q;let l=data||[];if(estado.perfil?.rol==='tecnico')l=l.filter(x=>x.tecnico_id===estado.usuario.id);window.v9OT=l;renderOT();}
-function renderOT(){const txt=($('buscar-orden')?.value||'').toLowerCase(),f=$('filtro-orden')?.value||'';let l=window.v9OT||[];if(txt)l=l.filter(x=>[x.folio,x.cotizacion_folio,x.placa].some(v=>(v||'').toLowerCase().includes(txt)));if(f)l=l.filter(x=>x.estado===f);if($('tabla-ordenes'))$('tabla-ordenes').innerHTML=l.map(x=>`<tr><td>${escapar(x.folio)}</td><td>${escapar(x.cotizacion_folio)}</td><td>${escapar(x.placa)} · ${escapar(x.vehiculo)}</td><td>${escapar(x.tecnico||'Sin asignar')}</td><td>${x.realizados}/${x.total}</td><td>${escapar(x.estado)}</td><td><button class="btn secundario pequeno" data-ot="${x.id}">Abrir</button></td></tr>`).join('');document.querySelectorAll('[data-ot]').forEach(b=>b.onclick=()=>abrirOT(b.dataset.ot));}
+async function cargarOT(){
+  if($('tabla-ordenes')) $('tabla-ordenes').innerHTML = filaSkeleton(7);
+  let q=sb.rpc('ordenes_trabajo_listar');const {data}=await q;let l=data||[];if(estado.perfil?.rol==='tecnico')l=l.filter(x=>x.tecnico_id===estado.usuario.id);window.v9OT=l;renderOT();
+}
+function renderOT(){
+  const txt=($('buscar-orden')?.value||'').toLowerCase(),f=$('filtro-orden')?.value||'';
+  let l=window.v9OT||[];
+  const hayFiltroActivo = !!(txt || f);
+  if(txt)l=l.filter(x=>[x.folio,x.cotizacion_folio,x.placa].some(v=>(v||'').toLowerCase().includes(txt)));
+  if(f)l=l.filter(x=>x.estado===f);
+  if($('tabla-ordenes')) $('tabla-ordenes').innerHTML = l.length
+    ? l.map(x=>`<tr><td>${escapar(x.folio)}</td><td>${escapar(x.cotizacion_folio)}</td><td>${escapar(x.placa)} · ${escapar(x.vehiculo)}</td><td>${escapar(x.tecnico||'Sin asignar')}</td><td>${x.realizados}/${x.total}</td><td>${escapar(x.estado)}</td><td><button class="btn secundario pequeno" data-ot="${x.id}">Abrir</button></td></tr>`).join('')
+    : `<tr><td colspan="7" class="vacio-tabla">${hayFiltroActivo ? 'No hay órdenes que coincidan con tu búsqueda o filtro.' : 'Sin órdenes de trabajo todavía. Se generan desde una cotización autorizada.'}</td></tr>`;
+  document.querySelectorAll('[data-ot]').forEach(b=>b.onclick=()=>abrirOT(b.dataset.ot));
+}
 $('buscar-orden')?.addEventListener('input',renderOT);$('filtro-orden')?.addEventListener('change',renderOT);
 $('btn-v9-ot')?.addEventListener('click',async()=>{const {data,error}=await sb.rpc('generar_orden_trabajo',{p_cotizacion_id:$('cotizacion-id').value});if(!error)abrirOT(data);});
 document.addEventListener('click',ev=>{const btn=ev.target.closest('[data-cerrar-modal]');if(!btn)return;const id=btn.dataset.cerrarModal;if(id&&document.getElementById(id))cerrarModal(id);});
@@ -423,7 +470,7 @@ $('v9-imprimir-ot')?.addEventListener('click', async () => {
 async function cargarCarga(){if(!admin())return;const mes=$('carga-mes').value||new Date().toISOString().slice(0,7);$('carga-mes').value=mes;const {data}=await sb.rpc('carga_trabajo_operativa',{p_mes:mes});$('carga-tecnicos').innerHTML=(data||[]).map(x=>`<div class="panel"><h3>${escapar(x.tecnico)}</h3><p>Órdenes abiertas: <b>${x.ordenes_abiertas}</b> · Trabajos pendientes: <b>${x.trabajos_pendientes}</b> · Órdenes atendidas en el mes: <b>${x.ordenes_mes}</b></p></div>`).join('')||'<div class="panel">Sin datos.</div>';}
 $('carga-mes')?.addEventListener('change',cargarCarga);
 // ingresos
-async function cargarIngresos(){const f=$('ingresos-fecha').value||hoy();$('ingresos-fecha').value=f;const {data}=await sb.rpc('ingresos_por_dia',{p_fecha:f});let l=data||[],m=$('ingresos-metodo').value;if(m)l=l.filter(x=>x.metodo===m);const sum=met=>l.filter(x=>x.estado==='valido'&&(!met||x.metodo===met)).reduce((s,x)=>s+Number(x.importe),0);$('ing-total').textContent='$'+money(sum());$('ing-efectivo').textContent='$'+money(sum('efectivo'));$('ing-transferencia').textContent='$'+money(sum('transferencia'));$('ing-tarjeta').textContent='$'+money(sum('tarjeta'));$('tabla-ingresos').innerHTML=l.map(x=>`<tr><td>${new Date(x.fecha_hora).toLocaleTimeString('es-MX')}</td><td>${escapar(x.folio)}</td><td>${escapar(x.cliente)} · ${escapar(x.placa)}</td><td>${escapar(x.metodo)}</td><td>${escapar(x.referencia||'—')}</td><td>$${money(x.importe)}</td><td>${escapar(x.estado)}</td></tr>`).join('');}
+async function cargarIngresos(){const f=$('ingresos-fecha').value||hoy();$('ingresos-fecha').value=f;const {data}=await sb.rpc('ingresos_por_dia',{p_fecha:f});let l=data||[],m=$('ingresos-metodo').value;if(m)l=l.filter(x=>x.metodo===m);const sum=met=>l.filter(x=>x.estado==='valido'&&(!met||x.metodo===met)).reduce((s,x)=>s+Number(x.importe),0);$('ing-total').textContent='$'+money(sum());$('ing-efectivo').textContent='$'+money(sum('efectivo'));$('ing-transferencia').textContent='$'+money(sum('transferencia'));$('ing-tarjeta').textContent='$'+money(sum('tarjeta'));$('tabla-ingresos').innerHTML=l.length?l.map(x=>`<tr><td>${new Date(x.fecha_hora).toLocaleTimeString('es-MX')}</td><td>${escapar(x.folio)}</td><td>${escapar(x.cliente)} · ${escapar(x.placa)}</td><td>${escapar(x.metodo)}</td><td>${escapar(x.referencia||'—')}</td><td>$${money(x.importe)}</td><td>${escapar(x.estado)}</td></tr>`).join(''):`<tr><td colspan="7" class="vacio-tabla">Sin pagos registrados en esta fecha.</td></tr>`;}
 $('ingresos-fecha')?.addEventListener('change',cargarIngresos);$('ingresos-metodo')?.addEventListener('change',cargarIngresos);
 // ============================================================================
 // HERRAMIENTA ESPECIAL · V11.1
@@ -432,7 +479,7 @@ function valorHerr(x,...nombres){for(const n of nombres){if(Object.prototype.has
 function datosHerrV11(x){return{id:valorHerr(x,'id'),codigo:valorHerr(x,'codigo','identificador'),nombre:valorHerr(x,'nombre'),serie:valorHerr(x,'numero_serie','serie'),marca:valorHerr(x,'marca'),modelo:valorHerr(x,'modelo'),ubicacion:valorHerr(x,'ubicacion'),estado:valorHerr(x,'estado'),asignada:valorHerr(x,'asignada_a','tecnico'),desde:valorHerr(x,'desde','prestado_desde'),observaciones:valorHerr(x,'observaciones')};}
 async function cargarHerramientas(){
   const tabla=$('tabla-herramientas');if(!tabla)return;
-  tabla.innerHTML='<tr><td colspan="9" class="vacio-tabla">Cargando…</td></tr>';
+  tabla.innerHTML=filaSkeleton(9);
   const {data,error}=await sb.rpc('herramientas_listar');
   if(error){console.error('Error al cargar herramientas:',error);tabla.innerHTML=`<tr><td colspan="9" class="vacio-tabla">${escapar(error.message||'No fue posible cargar las herramientas.')}</td></tr>`;return;}
   window.v9Herr=data||[];renderHerr();
@@ -441,10 +488,14 @@ function renderHerr(){
   const tabla=$('tabla-herramientas');if(!tabla)return;
   const t=($('buscar-herramienta')?.value||'').trim().toLowerCase();
   const f=$('filtro-herramienta')?.value||'';
+  const hayFiltroActivo = !!(t || f);
   let l=(window.v9Herr||[]).map(x=>({raw:x,v:datosHerrV11(x)}));
   if(t)l=l.filter(({v})=>[v.codigo,v.nombre,v.serie,v.marca,v.modelo,v.ubicacion].some(z=>String(z||'').toLowerCase().includes(t)));
   if(f)l=l.filter(({v})=>v.estado===f);
-  if(!l.length){tabla.innerHTML='<tr><td colspan="9" class="vacio-tabla">Sin herramientas para mostrar.</td></tr>';return;}
+  if(!l.length){
+    tabla.innerHTML = `<tr><td colspan="9" class="vacio-tabla">${hayFiltroActivo ? 'No hay herramientas que coincidan con tu búsqueda o filtro.' : `Sin herramientas registradas.${staff() ? ' Da clic en "+ Nueva herramienta" para agregar la primera.' : ''}`}</td></tr>`;
+    return;
+  }
   tabla.innerHTML=l.map(({v})=>`<tr><td><strong>${escapar(texto(v.codigo))}</strong></td><td>${escapar(texto(v.nombre))}</td><td>${escapar(texto(v.serie))}</td><td>${escapar([v.marca,v.modelo].filter(Boolean).join(' / ')||'—')}</td><td>${escapar(texto(v.ubicacion))}</td><td><span class="badge ${v.estado==='disponible'?'verde':v.estado==='prestada'?'naranja':'gris'}">${escapar(texto(v.estado))}</span></td><td>${escapar(texto(v.asignada))}</td><td>${escapar(fechaHora(v.desde))}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap">${staff()?`<button class="btn secundario pequeno" data-herr-editar="${v.id}">Editar</button>`:''}${v.estado==='disponible'&&staff()?`<button class="btn pequeno" data-prestar="${v.id}">Prestar</button>`:''}${v.estado==='prestada'&&staff()?`<button class="btn secundario pequeno" data-devolver="${v.id}">Devolver</button>`:''}<button class="btn secundario pequeno" data-historial-herr="${v.id}">Historial</button></div></td></tr>`).join('');
   document.querySelectorAll('[data-herr-editar]').forEach(b=>b.onclick=()=>abrirHerramientaEditar(b.dataset.herrEditar));
   document.querySelectorAll('[data-prestar]').forEach(b=>b.onclick=()=>prestamo(b.dataset.prestar));
@@ -542,7 +593,7 @@ async function abrirHistorialHerramienta(id){
   if($('v11-historial-titulo'))$('v11-historial-titulo').textContent='Historial de herramienta';
   if($('v11-historial-subtitulo'))$('v11-historial-subtitulo').textContent=[v.codigo,v.nombre,v.serie].filter(Boolean).join(' · ')||'—';
   const tbody=$('v11-tabla-historial');if(!tbody)return;
-  tbody.innerHTML='<tr><td colspan="7" class="vacio-tabla">Cargando…</td></tr>';
+  tbody.innerHTML=filaSkeleton(7);
   abrirModal('modal-v11-historial');
   const {data,error}=await sb.rpc('v11_herramienta_historial',{p_herramienta_id:id});
   if(error){console.error('Error historial herramienta:',error);tbody.innerHTML=`<tr><td colspan="7" class="vacio-tabla">${escapar(error.message||'No fue posible cargar el historial.')}</td></tr>`;return;}
@@ -553,5 +604,6 @@ async function abrirHistorialHerramienta(id){
 window.cargarBitacora=async function(){if(!admin())return;const {data}=await sb.rpc('bitacora_amigable');if(!$('tabla-bitacora'))return;$('tabla-bitacora').innerHTML=(data||[]).map(x=>`<tr><td>${new Date(x.fecha).toLocaleString('es-MX')}</td><td>${escapar(x.usuario_nombre||'Sistema')}</td><td>${escapar(x.resumen)}</td><td><button class="btn secundario pequeno" data-det="${encodeURIComponent(JSON.stringify(x.detalle||{}))}">Ver detalle</button></td></tr>`).join('');document.querySelectorAll('[data-det]').forEach(b=>b.onclick=()=>alert(Object.entries(JSON.parse(decodeURIComponent(b.dataset.det))).map(([k,v])=>`${k}: ${typeof v==='object'?JSON.stringify(v):v}`).join('\n')));};
 window.adicionales = adicionales;
 window.bloquearCot = bloquearCot;
-setTimeout(()=>{aplicarPermisos();activarModulos();dashboard();bloquearCot();adicionales();},600);
+
+setTimeout(()=>{activarModulos();dashboard();bloquearCot();adicionales();},600);
 })();

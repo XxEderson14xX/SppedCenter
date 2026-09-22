@@ -1,9 +1,15 @@
 // ============================================================================
-// Sistema Taller Automotriz · app.js · Versión V11.2
+// Sistema Taller Automotriz · app.js · Versión V11.8
 // V6 (captura inline + identidad permanente) + V7 (gate pagos, gestión usuarios)
 // + V8 (cascada de catálogo maestro + combos) + V10 (Catálogo Maestro)
 // + V11.1 (PDF estilo Speed Center: folio auto-ajuste, totales separados, anticipo 50%)
 // + V11.5 (restricción de menú y redirección directa para el rol técnico)
+// + V11.6 (bloqueo permanente cliente/vehículo/km + validación de kilometraje)
+// + V11.7 (Adicionales autorizados: sin emoji, en su propia mini-sección en
+//          pantalla y en el PDF; marcador limpio "codigo=ADICIONAL")
+// + V11.8 (iconos de menú, estados vacíos con contexto, tendencia de
+//          cotizaciones nuevas hoy vs. ayer, skeleton loaders, encabezados
+//          fijos de tabla)
 // ============================================================================
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const estado = {
@@ -22,6 +28,23 @@ function escHtml(v) {
   return String(v ?? "").replace(/[&<>'"]/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
   }[c]));
+}
+// === V11.8: helper de "skeleton loader" reutilizable para cualquier tabla ===
+// Genera filas grises pulsantes mientras se espera la respuesta del servidor,
+// en vez del texto plano "Cargando…". Se usa igual en app.js y v9.js.
+function filaSkeleton(cols, filas = 3) {
+  const fila = `<tr class="fila-skeleton">${Array.from({ length: cols }).map(() => `<td><div class="skeleton-bar"></div></td>`).join("")}</tr>`;
+  return fila.repeat(filas);
+}
+// === V11.7: helpers para identificar y limpiar renglones de "Adicional autorizado" ===
+// Se identifica por el marcador limpio "codigo === 'ADICIONAL'" (nuevo), y como
+// respaldo por el texto antiguo "Adicional autorizado" (por si quedó algo viejo
+// con el emoji 🔧, así se autolimpia la próxima vez que se guarde).
+function esAdicionalConcepto(c) {
+  return !!(c && (c.codigo === "ADICIONAL" || /adicional autorizado/i.test(c.descripcion || "")));
+}
+function descripcionLimpiaAdicional(desc) {
+  return String(desc || "").replace(/^\s*(?:🔧\s*)?adicional autorizado:\s*/i, "").trim();
 }
 function mostrarMensaje(idc, texto, tipo = "ok") {
   const c = el(idc); if (!c) return;
@@ -43,22 +66,18 @@ function puedeOperarCotizacion() {
   const rol = estado?.perfil?.rol;
   return rol === "administrador" || rol === "recepcion";
 }
-// === V11.2: bloqueo de datos en cotización autorizada (admin puede editar) ===
+// === V11.6: bloqueo PERMANENTE de cliente/vehículo/km una vez que la
+// cotización ya existe (tiene id guardado), sin importar el estado comercial.
+// Solo el Administrador puede editar después de guardada.
 const ESTADOS_BLOQUEO_EDICION = ["autorizada","cerrada","cancelada","rechazada"];
 function cotizacionBloqueada() {
-  // Bloqueo PERMANENTE: en cuanto la cotización ya existe (tiene id/folio
-  // guardado), cliente/vehículo/km quedan bloqueados para siempre, sin
-  // importar el estado comercial. Solo el Administrador puede editarlos.
   const yaExiste = !!(el("cotizacion-id")?.value);
   const bloqueoPorExistir = yaExiste && !esAdmin();
-
   // Se mantiene también el bloqueo por rol (consulta y técnico: siempre
   // bloqueado, incluso en una cotización nueva).
   const bloqueoPorRol = !puedeOperarCotizacion();
-
   return bloqueoPorExistir || bloqueoPorRol;
 }
-
 function aplicarPermisosCotizacion() {
   const puede = puedeOperarCotizacion();
   // Oculta "+ Nueva cotización"
@@ -146,10 +165,13 @@ async function iniciarSesionExitosa(session) {
     return;
   }
 
- estado.perfil = perfil;
-el("pantalla-login").style.display = "none";
-el("app-shell").classList.add("activo");
-// === V11.5: Restricción de menú para el rol "tecnico" ===
+  estado.perfil = perfil;
+  el("pantalla-login").style.display = "none";
+  el("app-shell").classList.add("activo");
+  el("pie-usuario").textContent = (perfil && perfil.nombre_completo) || session.user.email;
+  el("pie-rol").textContent = perfil ? `Rol: ${perfil.rol}` : "";
+
+  // === V11.5: Restricción de menú para el rol "tecnico" ===
   // Solo puede ver "Órdenes de trabajo". Todo lo demás del menú se oculta.
   if (perfil && perfil.rol === "tecnico") {
     document.querySelectorAll(".nav-item").forEach(n => {
@@ -219,6 +241,7 @@ function llenarSelectCategorias() {
 // INICIO / DASHBOARD
 // ============================================================================
 async function cargarInicio() {
+  el("tabla-actividad-reciente").innerHTML = filaSkeleton(6, 5);
   const { data: cots } = await sb.from("cotizaciones").select("*, clientes(nombre_completo), vehiculos(placa)").order("created_at", { ascending: false }).limit(300);
   const lista = cots || [];
   const ids = lista.map(c => c.id);
@@ -234,20 +257,45 @@ async function cargarInicio() {
   const kpis = el("kpis-inicio")?.querySelectorAll(".valor");
   if (kpis && kpis.length >= 4) {
     kpis[0].textContent = abiertas.length; kpis[1].textContent = pendientes.length; kpis[2].textContent = enProceso.length; kpis[3].textContent = conSaldo.length;
-  }el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0))); return `<tr><td>${escHtml(c.folio)}</td><td>${c.vehiculos?escHtml(c.vehiculos.placa):"—"}</td><td>${c.clientes?escHtml(c.clientes.nombre_completo):"—"}</td><td>$${money(c.total)}</td>
-<td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.</td></tr>`;
+  }
+  // === V11.8: tendencia de cotizaciones nuevas hoy vs. ayer ===
+  // Se calcula con los datos ya cargados (created_at), sin necesitar una
+  // consulta nueva ni un histórico guardado. Es un dato honesto: compara
+  // cuántas cotizaciones se crearon HOY contra cuántas se crearon AYER.
+  const tendenciaEl = el("kpi-cotizaciones-tendencia");
+  if (tendenciaEl) {
+    const hoyStr = new Date().toDateString();
+    const ayerDate = new Date(); ayerDate.setDate(ayerDate.getDate() - 1);
+    const ayerStr = ayerDate.toDateString();
+    const nuevasHoy = lista.filter(c => c.created_at && new Date(c.created_at).toDateString() === hoyStr).length;
+    const nuevasAyer = lista.filter(c => c.created_at && new Date(c.created_at).toDateString() === ayerStr).length;
+    if (nuevasHoy === 0 && nuevasAyer === 0) {
+      tendenciaEl.innerHTML = "";
+    } else if (nuevasHoy > nuevasAyer) {
+      tendenciaEl.innerHTML = `<span class="tendencia-arriba">▲ ${nuevasHoy} nueva(s) hoy</span> <span class="tendencia-mute">(ayer: ${nuevasAyer})</span>`;
+    } else if (nuevasHoy < nuevasAyer) {
+      tendenciaEl.innerHTML = `<span class="tendencia-abajo">▼ ${nuevasHoy} nueva(s) hoy</span> <span class="tendencia-mute">(ayer: ${nuevasAyer})</span>`;
+    } else {
+      tendenciaEl.innerHTML = `<span class="tendencia-mute">= ${nuevasHoy} nueva(s) hoy (igual que ayer)</span>`;
+    }
+  }
+  // === V11.8: estado vacío con contexto (solo si de verdad no hay cotizaciones) ===
+  el("tabla-actividad-reciente").innerHTML = lista.slice(0,12).map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0) - (pagosPorCot[c.id]||0))); return `<tr><td>${escHtml(c.folio)}</td><td>${c.vehiculos?escHtml(c.vehiculos.placa):"—"}</td><td>${c.clientes?escHtml(c.clientes.nombre_completo):"—"}</td><td>$${money(c.total)}</td><td>${badgeComercial(c.estado_comercial)}${saldo>0?` <span class="badge rojo">Debe $${money(saldo)}</span>`:""}</td><td>${c.fecha||""}</td></tr>`; }).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin cotizaciones todavía.${puedeOperarCotizacion() ? ' Da clic en "+ Nueva cotización" (dentro de Cotizaciones) para crear la primera.' : ''}</td></tr>`;
 }
 // ============================================================================
 // CLIENTES
 // ============================================================================
 async function cargarClientes(filtro = "") {
+  if (!filtro) el("tabla-clientes").innerHTML = filaSkeleton(5);
   const { data } = await sb.from("clientes").select("*, vehiculos(id)").order("nombre_completo");
   let lista = data || [];
   if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(c => (c.nombre_completo||"").toLowerCase().includes(f) || (c.telefono||"").includes(f) || (c.correo||"").toLowerCase().includes(f)); }
-   el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${escHtml(c.nombre_completo)}</td><td>${escHtml(c.telefono)||"—"}</td><td>${escHtml(c.correo)||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>
+  el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${escHtml(c.nombre_completo)}</td><td>${escHtml(c.telefono)||"—"}</td><td>${escHtml(c.correo)||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>
     <button class="btn secundario pequeno" data-historial-cliente="${c.id}">Historial</button>
     ${puedeEscribir()?` <button class="btn secundario pequeno" data-editar-cliente="${c.id}">Editar</button>`:""}
-  </td></tr>`).join("") : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.</td></tr>`;
+  </td></tr>`).join("") : (filtro
+    ? `<tr><td colspan="5" class="vacio-tabla">No se encontraron clientes para "${escHtml(filtro)}".</td></tr>`
+    : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.${puedeEscribir() ? ' Da clic en "+ Nuevo cliente" para agregar el primero.' : ''}</td></tr>`);
   document.querySelectorAll("[data-editar-cliente]").forEach(b => b.addEventListener("click", () => abrirModalCliente(lista.find(c => c.id === b.dataset.editarCliente))));
   document.querySelectorAll("[data-historial-cliente]").forEach(b => b.addEventListener("click", () => verHistorialCliente(b.dataset.historialCliente)));
 }
@@ -288,10 +336,13 @@ el("form-cliente")?.addEventListener("submit", async (ev) => {
 // ============================================================================
 function normalizarPlaca(p){ return (p||"").toUpperCase().replace(/[\s-]/g,""); }
 async function cargarVehiculos(filtro = "") {
+  if (!filtro) el("tabla-vehiculos").innerHTML = filaSkeleton(7);
   const { data } = await sb.from("vehiculos").select("*, clientes(nombre_completo)").order("placa");
   let lista = data || [];
   if (filtro) lista = lista.filter(v => normalizarPlaca(v.placa).includes(normalizarPlaca(filtro)) || (v.vin||"").toLowerCase().includes(filtro.toLowerCase()) || (v.marca||"").toLowerCase().includes(filtro.toLowerCase()) || (v.modelo||"").toLowerCase().includes(filtro.toLowerCase()));
- el("tabla-vehiculos").innerHTML = lista.length ? lista.map(v => `<tr><td>${escHtml(v.placa)}</td><td>${v.vin?escHtml(v.vin.slice(-8)):"—"}</td><td>${escHtml(v.marca)} ${escHtml(v.modelo)}</td><td>${v.anio||"—"}</td><td>${v.clientes?escHtml(v.clientes.nombre_completo):"—"}</td><td>${v.kilometraje_actual!=null?v.kilometraje_actual.toLocaleString("es-MX"):"—"}</td><td><button class="btn secundario pequeno" data-historial="${v.id}">Historial</button>${puedeEscribir()?` <button class="btn secundario pequeno" data-editar-vehiculo="${v.id}">Editar</button>`:""}</td></tr>`).join("") : `<tr><td colspan="7" class="vacio-tabla">Sin vehículos registrados.</td></tr>`;
+  el("tabla-vehiculos").innerHTML = lista.length ? lista.map(v => `<tr><td>${escHtml(v.placa)}</td><td>${v.vin?escHtml(v.vin.slice(-8)):"—"}</td><td>${escHtml(v.marca)} ${escHtml(v.modelo)}</td><td>${v.anio||"—"}</td><td>${v.clientes?escHtml(v.clientes.nombre_completo):"—"}</td><td>${v.kilometraje_actual!=null?v.kilometraje_actual.toLocaleString("es-MX"):"—"}</td><td><button class="btn secundario pequeno" data-historial="${v.id}">Historial</button>${puedeEscribir()?` <button class="btn secundario pequeno" data-editar-vehiculo="${v.id}">Editar</button>`:""}</td></tr>`).join("") : (filtro
+    ? `<tr><td colspan="7" class="vacio-tabla">No se encontraron vehículos para "${escHtml(filtro)}".</td></tr>`
+    : `<tr><td colspan="7" class="vacio-tabla">Sin vehículos registrados.${puedeEscribir() ? ' Da clic en "+ Nuevo vehículo" para agregar el primero.' : ''}</td></tr>`);
   document.querySelectorAll("[data-editar-vehiculo]").forEach(b => b.addEventListener("click", () => abrirModalVehiculo(lista.find(v => v.id === b.dataset.editarVehiculo))));
   document.querySelectorAll("[data-historial]").forEach(b => b.addEventListener("click", () => verHistorialVehiculo(b.dataset.historial)));
 }
@@ -310,11 +361,9 @@ function abrirModalVehiculo(v) {
   el("vehiculo-combustible").value = v ? v.combustible || "" : "";
   el("vehiculo-color").value = v ? v.color || "" : "";
   el("vehiculo-km").value = v ? v.kilometraje_actual || "" : "";
-
   // El kilometraje se actualiza SOLO desde las cotizaciones. Aquí queda
   // bloqueado, salvo para el Administrador (por si hay que corregir algo).
   if (el("vehiculo-km")) el("vehiculo-km").disabled = !esAdmin();
-
   cargarAniosCatalogo();
   if (el("cat-manual")) el("cat-manual").checked = false;
   abrirModal("modal-vehiculo");
@@ -390,7 +439,7 @@ async function verHistorialVehiculo(vehiculoId) {
   el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => { const saldo = Math.max(0, fixFloat(Number(c.total||0)-(pagosPorCot[c.id]||0))); return `<tr><td>${escHtml(c.folio)}</td><td>${c.fecha||"—"}</td><td>${c.kilometraje_visita!=null?c.kilometraje_visita.toLocaleString("es-MX"):"—"}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`; }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este vehículo no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
   const { data: placas } = await sb.from("placas_historial").select("*").eq("vehiculo_id", vehiculoId).order("desde", { ascending: false });
-    el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${escHtml(p.placa)}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
+  el("lista-historial-placas").innerHTML = (placas||[]).length ? (placas||[]).map(p => `<li><strong>${escHtml(p.placa)}</strong> ${p.vigente?'<span class="badge verde">Vigente</span>':'<span class="badge gris">Anterior</span>'}<br><small>Desde ${p.desde}${p.hasta?" hasta "+p.hasta:""}</small></li>`).join("") : `<li>Sin registro de placas.</li>`;
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?escHtml(cot.folio):""}</strong> · ${escHtml(s.descripcion)}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
   abrirModal("modal-historial");
 }
@@ -424,10 +473,10 @@ async function verHistorialCliente(clienteId) {
   el("tabla-historial-cotizaciones").innerHTML = lista.length ? lista.map(c => {
     const saldo = Math.max(0, fixFloat(Number(c.total||0)-(pagosPorCot[c.id]||0)));
     const autoTxt = c.vehiculos ? `${c.vehiculos.placa} · ${c.vehiculos.marca} ${c.vehiculos.modelo}` : "—";
-    return `<tr><td>${c.folio}</td><td>${c.fecha||"—"}</td><td>${autoTxt}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
+    return `<tr><td>${escHtml(c.folio)}</td><td>${c.fecha||"—"}</td><td>${escHtml(autoTxt)}</td><td>$${money(c.total)}</td><td>$${money(saldo)}</td><td>${badgeComercial(c.estado_comercial)}</td><td><button class="btn secundario pequeno" data-abrir-desde-historial="${c.id}">Abrir</button></td></tr>`;
   }).join("") : `<tr><td colspan="7" class="vacio-tabla">Este cliente no tiene cotizaciones.</td></tr>`;
   document.querySelectorAll("[data-abrir-desde-historial]").forEach(b => b.addEventListener("click", () => { cerrarModal("modal-historial"); abrirCotizacion(b.dataset.abrirDesdeHistorial); }));
-   el("lista-historial-placas").innerHTML = autos.length ? autos.map(v => `<li><strong>${escHtml(v.placa)}</strong> · ${escHtml(v.marca)} ${escHtml(v.modelo)} ${v.anio||""}${v.vin?" · VIN "+escHtml(v.vin.slice(-6)):""}</li>`).join("") : `<li>Este cliente aún no tiene vehículos registrados.</li>`;
+  el("lista-historial-placas").innerHTML = autos.length ? autos.map(v => `<li><strong>${escHtml(v.placa)}</strong> · ${escHtml(v.marca)} ${escHtml(v.modelo)} ${v.anio||""}${v.vin?" · VIN "+escHtml(v.vin.slice(-6)):""}</li>`).join("") : `<li>Este cliente aún no tiene vehículos registrados.</li>`;
   el("lista-historial-seguimiento").innerHTML = seguimientos.length ? seguimientos.map(s => { const cot = lista.find(c => c.id === s.cotizacion_id); return `<li><strong>${cot?escHtml(cot.folio):""}</strong> · ${escHtml(s.descripcion)}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`; }).join("") : `<li>Sin movimientos de seguimiento.</li>`;
   abrirModal("modal-historial");
 }
@@ -445,6 +494,7 @@ function nombreCategoriaCatalogo(codigo) {
   return cat ? cat.nombre : (codigo || "—");
 }
 async function cargarCatalogo(filtro = "") {
+  el("tabla-catalogo").innerHTML = filaSkeleton(6);
   const tipo = el("filtro-catalogo-tipo")?.value || "";
   const categoria = el("filtro-catalogo-categoria")?.value || "";
   const estadoFiltro = el("filtro-catalogo-estado")?.value || "";
@@ -457,6 +507,7 @@ async function cargarCatalogo(filtro = "") {
   llenarSelectCategorias();
   llenarFiltrosCatalogo();
   let lista = estado.catalogoMaestro.filter(x => ["CONCEPTO_SERVICIO","CONCEPTO_MANO_OBRA","CONCEPTO_REFACCION","COMBO"].includes(x.tipo));
+  const hayFiltroActivo = !!(filtro || tipo || categoria || estadoFiltro);
   if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(s => (s.codigo||"").toLowerCase().includes(f) || (s.nombre||"").toLowerCase().includes(f)); }
   if (tipo) lista = lista.filter(s => s.tipo === tipo);
   if (categoria) lista = lista.filter(s => s.categoria_codigo === categoria);
@@ -466,7 +517,9 @@ async function cargarCatalogo(filtro = "") {
     <td>${s.tipo === "COMBO" ? "Combos / paquetes" : nombreCategoriaCatalogo(s.categoria_codigo)}</td>
     <td><span class="badge ${s.activo ? "verde" : "gris"}">${s.activo ? "Activo" : "Inactivo"}</span></td>
     <td>${puedeEscribir() && s.tipo !== "COMBO" ? `<button class="btn secundario pequeno" data-editar-servicio="${s.codigo}">Editar</button>` : ""}</td>
-  </tr>`).join("") : `<tr><td colspan="6" class="vacio-tabla">Catálogo vacío.</td></tr>`;
+  </tr>`).join("") : (hayFiltroActivo
+    ? `<tr><td colspan="6" class="vacio-tabla">No hay resultados para este filtro.</td></tr>`
+    : `<tr><td colspan="6" class="vacio-tabla">Catálogo vacío.${puedeEscribir() ? ' Da clic en "+ Nuevo servicio" para agregar el primero.' : ''}</td></tr>`);
   document.querySelectorAll("[data-editar-servicio]").forEach(b => b.addEventListener("click", () => abrirModalServicio(lista.find(s => s.codigo === b.dataset.editarServicio))));
 }
 function llenarFiltrosCatalogo() {
@@ -517,6 +570,7 @@ el("form-servicio")?.addEventListener("submit", async ev => {
 // COTIZACIONES
 // ============================================================================
 async function cargarCotizaciones() {
+  el("tabla-cotizaciones").innerHTML = filaSkeleton(8);
   const { data } = await sb.from("cotizaciones").select("*, clientes(nombre_completo), vehiculos(placa, marca, modelo)").order("created_at", { ascending: false });
   const cots = data || [];
   const ids = cots.map(c => c.id);
@@ -529,12 +583,15 @@ function aplicarFiltrosCotizaciones(listaCompleta) {
   const texto = el("buscar-cotizacion").value.toLowerCase();
   const estadoF = el("filtro-estado-comercial").value;
   const pagoF = el("filtro-estado-pago") ? el("filtro-estado-pago").value : "";
+  const hayFiltroActivo = !!(texto || estadoF || pagoF);
   let lista = listaCompleta;
   if (texto) lista = lista.filter(c => c.folio.toLowerCase().includes(texto) || (c.vehiculos && c.vehiculos.placa.toLowerCase().includes(texto)) || (c.clientes && c.clientes.nombre_completo.toLowerCase().includes(texto)));
   if (estadoF) lista = lista.filter(c => c.estado_comercial === estadoF);
-  if (pagoF === "con_saldo") lista = lista.filter(c => (c._saldo||0) > 0);if (pagoF === "pagada") lista = lista.filter(c => (c._saldo||0) <= 0 && Number(c.total) > 0);
-el("tabla-cotizaciones").innerHTML = lista.length ? lista.map(c => `<tr><td>${escHtml(c.folio)}</td><td>${c.clientes?escHtml(c.clientes.nombre_completo):"—"}</td><td>${c.vehiculos?escHtml(c.vehiculos.placa)+" · "+escHtml(c.vehiculos.marca)+" "+escHtml(c.vehiculos.modelo):"—"}</td><td>$${money(c.total)}</td>
-<td>${c._saldo>0?`<span class="badge rojo">$${money(c._saldo)}</span>`:`<span class="badge verde">Pagada</span>`}</td><td>${badgeComercial(c.estado_comercial)}</td><td>${badgeServicio(c.estado_servicio)}</td><td><button class="btn secundario pequeno" data-abrir-cotizacion="${c.id}">Abrir</button></td></tr>`).join("") : `<tr><td colspan="8" class="vacio-tabla">Todavía no hay cotizaciones.</td></tr>`;
+  if (pagoF === "con_saldo") lista = lista.filter(c => (c._saldo||0) > 0);
+  if (pagoF === "pagada") lista = lista.filter(c => (c._saldo||0) <= 0 && Number(c.total) > 0);
+  el("tabla-cotizaciones").innerHTML = lista.length ? lista.map(c => `<tr><td>${escHtml(c.folio)}</td><td>${c.clientes?escHtml(c.clientes.nombre_completo):"—"}</td><td>${c.vehiculos?escHtml(c.vehiculos.placa)+" · "+escHtml(c.vehiculos.marca)+" "+escHtml(c.vehiculos.modelo):"—"}</td><td>$${money(c.total)}</td><td>${c._saldo>0?`<span class="badge rojo">$${money(c._saldo)}</span>`:`<span class="badge verde">Pagada</span>`}</td><td>${badgeComercial(c.estado_comercial)}</td><td>${badgeServicio(c.estado_servicio)}</td><td><button class="btn secundario pequeno" data-abrir-cotizacion="${c.id}">Abrir</button></td></tr>`).join("") : (hayFiltroActivo
+    ? `<tr><td colspan="8" class="vacio-tabla">No hay cotizaciones que coincidan con tu búsqueda o filtro.</td></tr>`
+    : `<tr><td colspan="8" class="vacio-tabla">Todavía no hay cotizaciones.${puedeOperarCotizacion() ? ' Da clic en "+ Nueva cotización" para crear la primera.' : ''}</td></tr>`);
   document.querySelectorAll("[data-abrir-cotizacion]").forEach(b => b.addEventListener("click", () => abrirCotizacion(b.dataset.abrirCotizacion)));
   window.__cotizacionesCache = listaCompleta;
 }
@@ -585,7 +642,7 @@ el("cliente-buscar")?.addEventListener("input", () => {
     cont.querySelectorAll("[data-cli]").forEach(item => item.addEventListener("click", () => {
       seleccion.clienteId = item.dataset.cli;
       el("cliente-elegido").style.display = "flex";
-            el("cliente-elegido").innerHTML = `✓ Cliente: <strong>${escHtml(item.dataset.nombre)}</strong> <button type="button" class="btn secundario pequeno" id="btn-quitar-cliente">Cambiar</button>`;
+      el("cliente-elegido").innerHTML = `✓ Cliente: <strong>${escHtml(item.dataset.nombre)}</strong> <button type="button" class="btn secundario pequeno" id="btn-quitar-cliente">Cambiar</button>`;
       el("cliente-buscar").value = ""; cont.classList.remove("activo");
       el("btn-quitar-cliente").addEventListener("click", () => { seleccion.clienteId = null; el("cliente-elegido").style.display = "none"; refrescarAutosDelCliente(); });
       refrescarAutosDelCliente();
@@ -752,7 +809,7 @@ async function abrirCotizacion(id) {
     await cargarArchivosCotizacion(id);
     const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", id).order("created_at");
     estado.conceptosEnEdicion = (detalle || []).map(d => ({ ...d }));
-   await cargarPagosCotizacion(id);
+    await cargarPagosCotizacion(id);
     await cargarSeguimientoCotizacion(id);
     await cargarTecnicoAsignado(id);
     if (typeof window.bloquearCot === "function") window.bloquearCot();
@@ -768,20 +825,32 @@ async function abrirCotizacion(id) {
   aplicarPermisosCotizacion();
   abrirModal("modal-cotizacion");
 }
+// === V11.7: renderConceptos ahora separa los renglones "Adicional autorizado"
+// en su propia mini-sección (tabla #cuerpo-adicionales-cot), sin emoji en el
+// texto mostrado, para no confundirlos con los conceptos originales.
 function renderConceptos() {
-  el("cuerpo-conceptos").innerHTML = estado.conceptosEnEdicion.map((cpt, i) => {
-    const esAdicional = (cpt.descripcion || "").startsWith("🔧 Adicional autorizado:");
-    return `
+  const filasNormales = [];
+  const filasAdicionales = [];
+  estado.conceptosEnEdicion.forEach((cpt, i) => {
+    const esAdicional = esAdicionalConcepto(cpt);
+    const descripcionMostrar = esAdicional ? descripcionLimpiaAdicional(cpt.descripcion) : (cpt.descripcion || "");
+    const fila = `
     <tr class="${esAdicional ? 'fila-adicional' : ''}">
       <td><select data-campo="tipo" data-i="${i}">${[["servicio","Servicio"],["mano_obra","Mano de obra"],["consumible","Consumible"],["refaccion_libre","Refacción"],["descuento","Descuento"],["nota","Nota"]].map(([v,txt])=>`<option value="${v}" ${cpt.tipo===v?"selected":""}>${txt}</option>`).join("")}</select></td>
-      <td><input data-campo="descripcion" data-i="${i}" value="${cpt.descripcion||""}"></td>
+      <td><input data-campo="descripcion" data-i="${i}" value="${descripcionMostrar}"></td>
       <td><input type="number" step="1" min="1" data-campo="cantidad" data-i="${i}" value="${cpt.cantidad||1}"></td>
       <td><input type="number" step="0.01" min="0" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
       <td><input type="number" step="0.01" min="0" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
       <td data-importe-i="${i}">$${money(cpt.importe||0)}</td>
       <td><button type="button" class="btn secundario pequeno" data-quitar="${i}">×</button></td>
     </tr>`;
-  }).join("");
+    if (esAdicional) filasAdicionales.push(fila); else filasNormales.push(fila);
+  });
+  el("cuerpo-conceptos").innerHTML = filasNormales.join("");
+  const contAdic = el("cuerpo-adicionales-cot");
+  if (contAdic) contAdic.innerHTML = filasAdicionales.join("");
+  const seccionAdic = el("seccion-adicionales-cot");
+  if (seccionAdic) seccionAdic.style.display = filasAdicionales.length ? "block" : "none";
   recalcularTotales();
 }
 el("cuerpo-conceptos")?.addEventListener("input", (e) => {
@@ -794,6 +863,23 @@ el("cuerpo-conceptos")?.addEventListener("input", (e) => {
   recalcularConcepto(i);
 });
 el("cuerpo-conceptos")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-quitar]");
+  if (!b) return;
+  estado.conceptosEnEdicion.splice(Number(b.dataset.quitar), 1);
+  renderConceptos();
+});
+// === V11.7: los mismos manejadores de edición/quitar deben funcionar también
+// dentro de la mini-tabla de Adicionales (usa los mismos data-campo/data-i).
+el("cuerpo-adicionales-cot")?.addEventListener("input", (e) => {
+  const input = e.target;
+  if (!input.dataset.campo) return;
+  const i = Number(input.dataset.i), campo = input.dataset.campo;
+  if (campo === "cantidad") estado.conceptosEnEdicion[i][campo] = Math.max(1, Math.floor(Number(input.value||1)));
+  else if (["precio_unitario","descuento"].includes(campo)) estado.conceptosEnEdicion[i][campo] = Math.max(0, fixFloat(input.value||0));
+  else estado.conceptosEnEdicion[i][campo] = input.value;
+  recalcularConcepto(i);
+});
+el("cuerpo-adicionales-cot")?.addEventListener("click", (e) => {
   const b = e.target.closest("[data-quitar]");
   if (!b) return;
   estado.conceptosEnEdicion.splice(Number(b.dataset.quitar), 1);
@@ -854,7 +940,7 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
   const errCierre = validarReglasDeCierre(saldoActual);
   if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
-   // === Validación de kilometraje sincronizado con el vehículo ===
+  // === Validación de kilometraje sincronizado con el vehículo ===
   const kmVisitaNum = el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null;
   if (kmVisitaNum !== null && vehiculoId) {
     const { data: resKm, error: errKm } = await sb.rpc("validar_y_actualizar_km_vehiculo", {
@@ -886,7 +972,25 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
     await registrarBitacora("cotizaciones", id, "actualizar", null, encabezado);
   }
   await sb.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
-  if (estado.conceptosEnEdicion.length) { const filas = estado.conceptosEnEdicion.map(c => ({ cotizacion_id: id, tipo: c.tipo, descripcion: c.descripcion, cantidad: c.cantidad || 1, precio_unitario: c.precio_unitario || 0, descuento: c.descuento || 0, importe: c.importe || 0 })); await sb.from("detalle_cotizacion").insert(filas); }
+  if (estado.conceptosEnEdicion.length) {
+    // === V11.7: al guardar, se limpia el texto de los adicionales (por si
+    // quedó algo con el emoji viejo) y se persiste el marcador "codigo=ADICIONAL"
+    // para poder identificarlos de forma confiable la próxima vez que se abra.
+    const filas = estado.conceptosEnEdicion.map(c => {
+      const esAdic = esAdicionalConcepto(c);
+      return {
+        cotizacion_id: id,
+        tipo: c.tipo,
+        descripcion: esAdic ? descripcionLimpiaAdicional(c.descripcion) : c.descripcion,
+        cantidad: c.cantidad || 1,
+        precio_unitario: c.precio_unitario || 0,
+        descuento: c.descuento || 0,
+        importe: c.importe || 0,
+        codigo: esAdic ? "ADICIONAL" : null
+      };
+    });
+    await sb.from("detalle_cotizacion").insert(filas);
+  }
   actualizarGatePagos();
   mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
   await cargarDatosBase(); await cargarCotizaciones();
@@ -915,7 +1019,7 @@ el("btn-agregar-pago")?.addEventListener("click", async () => {
 // --- Seguimiento ---
 async function cargarSeguimientoCotizacion(cotizacionId) {
   const { data } = await sb.from("seguimientos").select("*").eq("cotizacion_id", cotizacionId).order("created_at", { ascending: false });
-    el("lista-seguimiento").innerHTML = (data||[]).map(s => `<li>${escHtml(s.descripcion)}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`).join("") || `<li>Sin movimientos registrados.</li>`;
+  el("lista-seguimiento").innerHTML = (data||[]).map(s => `<li>${escHtml(s.descripcion)}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`).join("") || `<li>Sin movimientos registrados.</li>`;
 }
 el("btn-agregar-seguimiento")?.addEventListener("click", async () => {
   const id = el("cotizacion-id").value; const texto = el("seguimiento-texto").value.trim();
@@ -1002,6 +1106,8 @@ el("btn-pdf-cotizacion")?.addEventListener("click", async () => {
 });
 // ============================================================================
 // PDF de cotización · estilo "SPEED CENTER"
+// V11.7: los conceptos normales y los "Adicionales autorizados" se imprimen
+// en 2 tablas separadas (mini-sección "ADICIONALES AUTORIZADOS"), sin emoji.
 // ============================================================================
 async function generarPDFCotizacion(cotizacionId) {
   const EMPRESA = {
@@ -1124,7 +1230,11 @@ async function generarPDFCotizacion(cotizacionId) {
   y += H;
   celdaHeader(M, PW - 2 * M, H, "COMENTARIOS");
   y += H + 8;
-  const bodyTabla = (detalle || []).map(d => [
+  // === V11.7: separar conceptos normales de "Adicionales autorizados" ===
+  const detalleTodos = detalle || [];
+  const conceptosNormales = detalleTodos.filter(d => !esAdicionalConcepto(d));
+  const conceptosAdicionales = detalleTodos.filter(d => esAdicionalConcepto(d));
+  const bodyTabla = conceptosNormales.map(d => [
     String(d.cantidad || 1),
     d.descripcion || "",
     dinero(d.precio_unitario),
@@ -1146,6 +1256,33 @@ async function generarPDFCotizacion(cotizacionId) {
     margin: { left: M, right: M }
   });
   y = doc.lastAutoTable.finalY + 14;
+  if (conceptosAdicionales.length) {
+    doc.setFont(undefined, "bold"); doc.setFontSize(9.5); doc.setTextColor(...NEGRO);
+    doc.text("ADICIONALES AUTORIZADOS", M, y);
+    y += 8;
+    const bodyAdicionales = conceptosAdicionales.map(d => [
+      String(d.cantidad || 1),
+      descripcionLimpiaAdicional(d.descripcion),
+      dinero(d.precio_unitario),
+      dinero(d.importe)
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [["CANTIDAD", "DESCRIPCIÓN", "IMPORTE UNITARIO", "TOTAL"]],
+      body: bodyAdicionales,
+      theme: "grid",
+      headStyles: { fillColor: GRIS, textColor: 255, fontSize: 8, halign: "center" },
+      styles: { fontSize: 8.5, textColor: NEGRO, cellPadding: 4, lineColor: LINEA },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 70 },
+        1: { halign: "left" },
+        2: { halign: "right", cellWidth: 110 },
+        3: { halign: "right", cellWidth: 110 }
+      },
+      margin: { left: M, right: M }
+    });
+    y = doc.lastAutoTable.finalY + 14;
+  }
   const bh = 18;
   const etW = 105, valW = 120;
   const bloqueW = etW + valW;
@@ -1191,7 +1328,7 @@ async function generarPDFCotizacion(cotizacionId) {
 // ============================================================================
 let _listaUsuarios = [];
 async function cargarUsuarios(filtro = "") {
-  el("tabla-usuarios").innerHTML = `<tr><td colspan="6" class="vacio-tabla">Cargando…</td></tr>`;
+  el("tabla-usuarios").innerHTML = filaSkeleton(6);
   const { data, error } = await sb.rpc("listar_usuarios");
   if (error) { el("tabla-usuarios").innerHTML = `<tr><td colspan="6" class="vacio-tabla">Error: ${error.message}</td></tr>`; return; }
   _listaUsuarios = data || [];
@@ -1331,6 +1468,7 @@ el("btn-confirmar-crear-usuario")?.addEventListener("click", async () => {
 // BITÁCORA
 // ============================================================================
 async function cargarBitacora() {
+  el("tabla-bitacora").innerHTML = filaSkeleton(4);
   const { data } = await sb.from("bitacora").select("*").order("created_at", { ascending: false }).limit(100);
   el("tabla-bitacora").innerHTML = (data||[]).map(b => `<tr><td>${new Date(b.created_at).toLocaleString("es-MX")}</td><td>${b.tabla_afectada}</td><td>${b.accion}</td><td>${b.valores_nuevos?JSON.stringify(b.valores_nuevos).slice(0,120):"—"}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio-tabla">Sin actividad registrada.</td></tr>`;
 }
