@@ -1516,3 +1516,39 @@ el("btn-guardar-combo")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
   setTimeout(() => cerrarModal("modal-combo"), 1200);
 });
+
+
+// === V11.9: Validación dinámica de contraseña ===
+function evaluarPassword(valor, ids) {
+  const tieneLen = valor.length >= 8;
+  const tieneMin = /[a-z]/.test(valor);
+  const tieneMay = /[A-Z]/.test(valor);
+  const tieneNum = /[0-9]/.test(valor);
+  const setReq = (id, valido, texto) => {
+    const elReq = el(id);
+    if (!elReq) return;
+    elReq.className = valido ? "req-item valido" : "req-item invalido";
+    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;
+  };
+  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");
+  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");
+  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");
+  setReq(ids.num, tieneNum, "Un número (0-9)");
+  return tieneLen && tieneMin && tieneMay && tieneNum;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const passEdit = el("usuario-password");
+  const passReqEdit = el("password-req-editar");
+  passEdit?.addEventListener("input", () => {
+    const val = passEdit.value;
+    if (!val) { if (passReqEdit) passReqEdit.style.display = "none"; return; }
+    if (passReqEdit) passReqEdit.style.display = "flex";
+    evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });
+  });
+
+  const passNuevo = el("nuevo-password");
+  passNuevo?.addEventListener("input", () => {
+    evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
+  });
+});
