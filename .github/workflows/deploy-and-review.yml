@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'index.html'
+      - 'assets/**'
   issues:
     types: [opened, edited]
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -27,25 +30,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Ejecutar script de actualización v11.9.8
+      - name: Ejecutar script de actualización v11.9.9
         run: |
           cat << 'EOF' > update_script.js
           const fs = require("fs");
 
           // 1. Actualizar index.html (versión y placeholders limpios)
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.8");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.9");
           html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
           fs.writeFileSync("index.html", html);
 
           // 2. Aplicar estilos CSS limpios
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("v11.9.8")) {
-            css += '\n\n/* v11.9.8 - Estilos de validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 8px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 6px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--text-mute);\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
+          if (!css.includes("v11.9.9")) {
+            css += '\n\n/* v11.9.9 - Estilos de validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 8px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 6px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--text-mute);\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          console.log("Actualización v11.9.8 aplicada.");
+          console.log("Actualización v11.9.9 aplicada.");
           EOF
           node update_script.js
           rm update_script.js
@@ -53,5 +56,5 @@ jobs:
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(ci): Agrega regla de concurrencia para evitar fallos en Pages v11.9.8"
+          commit_message: "fix(ci): Ignora bucles de auto-commit en GitHub Pages v11.9.9"
           branch: main
