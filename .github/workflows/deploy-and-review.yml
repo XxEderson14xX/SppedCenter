@@ -18,4 +18,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Aquí va el paso que procesa la petición de Gemini cuando se abre un Issue
+      - name: Gemini Auto Code Generator & Injector
+        uses: google-github-actions/run-gemini-cli@v1
+        continue-on-error: true
+        with:
+          api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: "Lee la descripción del Issue actual en GitHub y aplica directamente las modificaciones de código requeridas en index.html, assets/styles.css y assets/app.js respetando la arquitectura actual de SPEEDCENTER."
+
+      - name: Commit & Push Changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(auto): Actualización automática Gemini para Issue #${{ github.event.issue.number }}"
+          branch: main
