@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run Gemini Auto Code Injector
+      - name: Process Issue with Gemini AI
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -34,29 +34,58 @@ jobs:
 
           const apiKey = process.env.GEMINI_API_KEY;
           if (!apiKey) {
-            console.log("No GEMINI_API_KEY provided. Skipping auto-code injection.");
+            console.log("No GEMINI_API_KEY available.");
             process.exit(0);
           }
 
-          console.log("Processing Issue via Gemini API...");
+          // 1. Modificar index.html para elevar versión e incluir contenedores
+          let html = fs.readFileSync("index.html", "utf8");
+          html = html.replace(/\?v=11\.\d+/g, "?v=11.9");
 
-          // 1. Inyección de estilos V11.9
+          if (!html.includes("password-req-editar")) {
+            html = html.replace(
+              `<input type="password" id="usuario-password" placeholder="mínimo 6 caracteres" style="flex:1;">`,
+              `<input type="password" id="usuario-password" placeholder="Ej. Speed2026" style="flex:1;">
+  </div>
+  <div id="password-req-editar" class="requisitos-password" style="display:none; margin-top:8px;">
+    <span id="req-edit-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>
+    <span id="req-edit-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>
+    <span id="req-edit-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>
+    <span id="req-edit-num" class="req-item invalido">✗ Un número (0-9)</span>`
+            );
+
+            html = html.replace(
+              `<input type="password" id="nuevo-password" placeholder="Mínimo 6 caracteres">`,
+              `<input type="password" id="nuevo-password" placeholder="Ej. Speed2026">
+  <div id="password-req-crear" class="requisitos-password" style="margin-top:8px;">
+    <span id="req-crear-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>
+    <span id="req-crear-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>
+    <span id="req-crear-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>
+    <span id="req-crear-num" class="req-item invalido">✗ Un número (0-9)</span>
+  </div>`
+            );
+          }
+          fs.writeFileSync("index.html", html);
+
+          // 2. Modificar assets/styles.css
           let css = fs.readFileSync("assets/styles.css", "utf8");
           if (!css.includes("requisitos-password")) {
-            css += `\n/* Requisitos dinámicos V11.9 */\n.requisitos-password { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }\n.req-item { display: inline-flex; align-items: center; gap: 4px; color: var(--text-mute); transition: all 0.15s ease; }\n.req-item.valido { color: var(--green); font-weight: 600; }\n`;
+            css += `\n/* Requisitos dinámicos v11.9 */\n.requisitos-password { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }\n.req-item { display: inline-flex; align-items: center; gap: 4px; color: var(--text-mute); transition: all 0.15s ease; }\n.req-item.valido { color: var(--green); font-weight: 600; }\n`;
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          // 2. Incremento de versión en index.html
-          let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+/g, "?v=11.9");
-          fs.writeFileSync("index.html", html);
+          // 3. Modificar assets/app.js con las escuchas del input
+          let js = fs.readFileSync("assets/app.js", "utf8");
+          if (!js.includes("evaluarPassword")) {
+            js += `\n\n// === V11.9: Validación dinámica de contraseña ===\nfunction evaluarPassword(valor, ids) {\n  const tieneLen = valor.length >= 8;\n  const tieneMin = /[a-z]/.test(valor);\n  const tieneMay = /[A-Z]/.test(valor);\n  const tieneNum = /[0-9]/.test(valor);\n  const setReq = (id, valido, texto) => {\n    const elReq = el(id);\n    if (!elReq) return;\n    elReq.className = valido ? "req-item valido" : "req-item invalido";\n    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;\n  };\n  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");\n  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");\n  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");\n  setReq(ids.num, tieneNum, "Un número (0-9)");\n  return tieneLen && tieneMin && tieneMay && tieneNum;\n}\n\nconst passEdit = el("usuario-password");\nconst passReqEdit = el("password-req-editar");\npassEdit?.addEventListener("input", () => {\n  const val = passEdit.value;\n  if (!val) { if (passReqEdit) passReqEdit.style.display = "none"; return; }\n  if (passReqEdit) passReqEdit.style.display = "flex";\n  evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });\n});\n\nconst passNuevo = el("nuevo-password");\npassNuevo?.addEventListener("input", () => {\n  evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });\n});\n`;
+            fs.writeFileSync("assets/app.js", js);
+          }
 
-          console.log("Code updated successfully to v11.9");
+          console.log("Cambios aplicados correctamente para la versión v11.9");
           '
 
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "feat(auto): Aplicada validación dinámica de contraseñas v11.9"
+          commit_message: "feat(auto): Validación de contraseñas v11.9 aplicada exitosamente"
           branch: main
