@@ -23,71 +23,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Pulir diseño y placeholders v11.9.3
+      - name: Ajustar diseño y placeholders v11.9.4
         run: |
           cat << 'EOF' > update_script.js
           const fs = require("fs");
 
-          // 1. Actualizar index.html (placeholders y versión v11.9.3)
+          // 1. Actualizar index.html (versión v11.9.4 y placeholders limpios)
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.3");
-
-          // Limpiar placeholders viejos de 6 caracteres
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.4");
           html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
-
           fs.writeFileSync("index.html", html);
 
-          // 2. Refinar estilos CSS para una distribución perfecta
+          // 2. Aplicar estilos CSS perfectamente alineados
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes(".requisitos-password")) {
-            css += '\n';
-          }
-          // Asegurar reglas CSS limpias y profesionales para los requisitos
-          const cssRequisitos = `
-          /* Requisitos dinámicos v11.9.3 - Diseño alineado */
-          .requisitos-password {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            font-size: 11.5px;
-            background: #f8fafc;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            margin-top: 6px;
-            width: 100%;
-            box-sizing: border-box;
-          }
-          .req-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--text-mute);
-            transition: all 0.15s ease;
-          }
-          .req-item.valido {
-            color: #16a34a;
-            font-weight: 600;
-          }
-          .req-item.invalido {
-            color: #dc2626;
-          }
-          `;
-          
-          if (!css.includes("Diseño alineado")) {
-            css += cssRequisitos;
+          if (!css.includes("v11.9.4")) {
+            css += '\n\n/* v11.9.4 - Estilos de validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 8px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 6px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--text-mute);\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          // 3. Actualizar la lógica en assets/app.js para validación en tiempo real
-          let js = fs.readFileSync("assets/app.js", "utf8");
-          
-          if (!js.includes("v11.9.3")) {
-            js += '\n\n// === V11.9.3: Validación y UI de contraseñas ===\nfunction evaluarPassword(valor, ids) {\n  const tieneLen = valor.length >= 8;\n  const tieneMin = /[a-z]/.test(valor);\n  const tieneMay = /[A-Z]/.test(valor);\n  const tieneNum = /[0-9]/.test(valor);\n  const setReq = (id, valido, texto) => {\n    const elReq = document.getElementById(id);\n    if (!elReq) return;\n    elReq.className = valido ? "req-item valido" : "req-item invalido";\n    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;\n  };\n  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");\n  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");\n  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");\n  setReq(ids.num, tieneNum, "Un número (0-9)");\n  return tieneLen && tieneMin && tieneMay && tieneNum;\n}\n\ndocument.addEventListener("DOMContentLoaded", () => {\n  const passEdit = document.getElementById("usuario-password");\n  const passReqEdit = document.getElementById("password-req-editar");\n  if (passEdit && passReqEdit) {\n    passEdit.addEventListener("input", () => {\n      const val = passEdit.value;\n      evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });\n    });\n  }\n\n  const passNuevo = document.getElementById("nuevo-password");\n  const passReqCrear = document.getElementById("password-req-crear");\n  if (passNuevo && passReqCrear) {\n    passNuevo.addEventListener("input", () => {\n      evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });\n    });\n  }\n});\n';
-            fs.writeFileSync("assets/app.js", js);
-          }
-
-          console.log("Actualización de diseño y lógica v11.9.3 aplicada.");
+          console.log("Actualización aplicada correctamente.");
           EOF
           node update_script.js
           rm update_script.js
@@ -95,5 +49,5 @@ jobs:
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "style(ui): Corrige distribución, placeholders y visibilidad de validación v11.9.3"
+          commit_message: "style(ui): Ajustes limpios de diseño y texto de contraseña v11.9.4"
           branch: main
