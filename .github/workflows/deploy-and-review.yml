@@ -23,41 +23,35 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Inyectar cambios UI v11.9
+      - name: Corregir UI de validación en modal de edición v11.9.2
         run: |
           cat << 'EOF' > update_script.js
           const fs = require("fs");
 
-          // 1. Modificar index.html
+          // 1. Modificar index.html subiendo versión
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.2");
 
-          if (!html.includes("password-req-editar")) {
-            html = html.replace(/id="usuario-password"[^>]*>/i, (match) => {
-              return match + '\n  <div id="password-req-editar" class="requisitos-password" style="display:none; margin-top:8px;">\n    <span id="req-edit-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>\n    <span id="req-edit-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>\n    <span id="req-edit-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>\n    <span id="req-edit-num" class="req-item invalido">✗ Un número (0-9)</span>\n  </div>';
-            });
-
-            html = html.replace(/id="nuevo-password"[^>]*>/i, (match) => {
-              return match + '\n  <div id="password-req-crear" class="requisitos-password" style="margin-top:8px;">\n    <span id="req-crear-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>\n    <span id="req-crear-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>\n    <span id="req-crear-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>\n    <span id="req-crear-num" class="req-item invalido">✗ Un número (0-9)</span>\n  </div>';
-            });
+          // Inyección precisa fuera de la fila flex en el modal de edición
+          if (!html.includes('id="password-req-editar"')) {
+            html = html.replace(
+              /id="usuario-password"[^>]*>[\s\S]*?<\/div>/i,
+              (match) => {
+                return match + '\n            <div id="password-req-editar" class="requisitos-password" style="display:none; margin-top:8px;">\n              <span id="req-edit-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">✗ Un número (0-9)</span>\n            </div>';
+              }
+            );
             fs.writeFileSync("index.html", html);
           }
 
-          // 2. Modificar assets/styles.css
-          let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("requisitos-password")) {
-            css += '\n/* Requisitos dinámicos v11.9 */\n.requisitos-password { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }\n.req-item { display: inline-flex; align-items: center; gap: 4px; color: var(--text-mute); transition: all 0.15s ease; }\n.req-item.valido { color: var(--green); font-weight: 600; }\n';
-            fs.writeFileSync("assets/styles.css", css);
-          }
-
-          // 3. Modificar assets/app.js
+          // 2. Modificar assets/app.js para asegurar el evento input en la edición
           let js = fs.readFileSync("assets/app.js", "utf8");
+          
           if (!js.includes("evaluarPassword")) {
-            js += '\n\n// === V11.9: Validación dinámica de contraseña ===\nfunction evaluarPassword(valor, ids) {\n  const tieneLen = valor.length >= 8;\n  const tieneMin = /[a-z]/.test(valor);\n  const tieneMay = /[A-Z]/.test(valor);\n  const tieneNum = /[0-9]/.test(valor);\n  const setReq = (id, valido, texto) => {\n    const elReq = el(id);\n    if (!elReq) return;\n    elReq.className = valido ? "req-item valido" : "req-item invalido";\n    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;\n  };\n  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");\n  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");\n  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");\n  setReq(ids.num, tieneNum, "Un número (0-9)");\n  return tieneLen && tieneMin && tieneMay && tieneNum;\n}\n\ndocument.addEventListener("DOMContentLoaded", () => {\n  const passEdit = el("usuario-password");\n  const passReqEdit = el("password-req-editar");\n  passEdit?.addEventListener("input", () => {\n    const val = passEdit.value;\n    if (!val) { if (passReqEdit) passReqEdit.style.display = "none"; return; }\n    if (passReqEdit) passReqEdit.style.display = "flex";\n    evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });\n  });\n\n  const passNuevo = el("nuevo-password");\n  passNuevo?.addEventListener("input", () => {\n    evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });\n  });\n});\n';
+            js += '\n\n// === V11.9.2: Validación dinámica de contraseña ===\nfunction evaluarPassword(valor, ids) {\n  const tieneLen = valor.length >= 8;\n  const tieneMin = /[a-z]/.test(valor);\n  const tieneMay = /[A-Z]/.test(valor);\n  const tieneNum = /[0-9]/.test(valor);\n  const setReq = (id, valido, texto) => {\n    const elReq = document.getElementById(id);\n    if (!elReq) return;\n    elReq.className = valido ? "req-item valido" : "req-item invalido";\n    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;\n  };\n  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");\n  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");\n  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");\n  setReq(ids.num, tieneNum, "Un número (0-9)");\n  return tieneLen && tieneMin && tieneMay && tieneNum;\n}\n\ndocument.addEventListener("DOMContentLoaded", () => {\n  const attachPassEvents = () => {\n    const passEdit = document.getElementById("usuario-password");\n    const passReqEdit = document.getElementById("password-req-editar");\n    if (passEdit && passReqEdit) {\n      passEdit.addEventListener("input", () => {\n        const val = passEdit.value;\n        if (!val) { passReqEdit.style.display = "none"; return; }\n        passReqEdit.style.display = "flex";\n        evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });\n      });\n    }\n\n    const passNuevo = document.getElementById("nuevo-password");\n    const passReqCrear = document.getElementById("password-req-crear");\n    if (passNuevo && passReqCrear) {\n      passNuevo.addEventListener("input", () => {\n        evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });\n      });\n    }\n  };\n  attachPassEvents();\n});\n';
             fs.writeFileSync("assets/app.js", js);
           }
 
-          console.log("Inyección completada sin errores.");
+          console.log("Corrección para modal de edición v11.9.2 completada.");
           EOF
           node update_script.js
           rm update_script.js
@@ -65,5 +59,5 @@ jobs:
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "feat(auto): Inyección V11.9 verificada y corregida"
+          commit_message: "fix(ui): Corrige contenedor de validación en modal de editar usuario v11.9.2"
           branch: main
