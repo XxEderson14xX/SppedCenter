@@ -151,7 +151,6 @@ el("btn-salir")?.addEventListener("click", async () => { await sb.auth.signOut()
 async function iniciarSesionExitosa(session) {
   estado.usuario = session.user;
   const { data: perfil } = await sb.from("perfiles").select("*").eq("id", session.user.id).single();
-
   // === Fix de seguridad: bloquear sesión de usuarios desactivados ===
   // Sin esto, un usuario marcado como activo=false en "Usuarios" podía
   // seguir usando el sistema si su sesión ya estaba iniciada (o si el
@@ -164,13 +163,11 @@ async function iniciarSesionExitosa(session) {
     if (el("login-error")) el("login-error").textContent = "Tu cuenta está desactivada. Contacta al administrador.";
     return;
   }
-
   estado.perfil = perfil;
   el("pantalla-login").style.display = "none";
   el("app-shell").classList.add("activo");
   el("pie-usuario").textContent = (perfil && perfil.nombre_completo) || session.user.email;
   el("pie-rol").textContent = perfil ? `Rol: ${perfil.rol}` : "";
-
   // === V11.5: Restricción de menú para el rol "tecnico" ===
   // Solo puede ver "Órdenes de trabajo". Todo lo demás del menú se oculta.
   if (perfil && perfil.rol === "tecnico") {
@@ -178,9 +175,7 @@ async function iniciarSesionExitosa(session) {
       if (n.dataset.modulo !== "ordenes") n.style.display = "none";
     });
   }
-
   await cargarDatosBase();
-
   // El técnico entra directo a "Órdenes de trabajo"; los demás roles a Inicio.
   if (perfil && perfil.rol === "tecnico") {
     document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("activo"));
@@ -1516,45 +1511,12 @@ el("btn-guardar-combo")?.addEventListener("click", async () => {
   mostrarMensaje("mensaje-combo", `Combo "${nombre}" creado (${data}).`);
   setTimeout(() => cerrarModal("modal-combo"), 1200);
 });
-
-
-// === V11.9: Validación dinámica de contraseña ===
-function evaluarPassword(valor, ids) {
-  const tieneLen = valor.length >= 8;
-  const tieneMin = /[a-z]/.test(valor);
-  const tieneMay = /[A-Z]/.test(valor);
-  const tieneNum = /[0-9]/.test(valor);
-  const setReq = (id, valido, texto) => {
-    const elReq = el(id);
-    if (!elReq) return;
-    elReq.className = valido ? "req-item valido" : "req-item invalido";
-    elReq.textContent = (valido ? "✓ " : "✗ ") + texto;
-  };
-  setReq(ids.len, tieneLen, "Mínimo 8 caracteres");
-  setReq(ids.min, tieneMin, "Una letra minúscula (a-z)");
-  setReq(ids.may, tieneMay, "Una letra mayúscula (A-Z)");
-  setReq(ids.num, tieneNum, "Un número (0-9)");
-  return tieneLen && tieneMin && tieneMay && tieneNum;
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const passEdit = el("usuario-password");
-  const passReqEdit = el("password-req-editar");
-  passEdit?.addEventListener("input", () => {
-    const val = passEdit.value;
-    if (!val) { if (passReqEdit) passReqEdit.style.display = "none"; return; }
-    if (passReqEdit) passReqEdit.style.display = "flex";
-    evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });
-  });
-
-  const passNuevo = el("nuevo-password");
-  passNuevo?.addEventListener("input", () => {
-    evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
-  });
-});
-
-
 // === V11.9.3: Validación y UI de contraseñas ===
+// Reemplaza el bloque duplicado y buggy de V11.9 (que ocultaba la guía de
+// requisitos cuando el campo estaba vacío). Esta versión NUNCA oculta el
+// recuadro de requisitos: siempre debe verse como guía, tanto en "Crear
+// usuario nuevo" como en "Editar usuario" (Perfil), desde que se abre el
+// modal, sin necesidad de escribir nada primero.
 function evaluarPassword(valor, ids) {
   const tieneLen = valor.length >= 8;
   const tieneMin = /[a-z]/.test(valor);
@@ -1572,7 +1534,6 @@ function evaluarPassword(valor, ids) {
   setReq(ids.num, tieneNum, "Un número (0-9)");
   return tieneLen && tieneMin && tieneMay && tieneNum;
 }
-
 document.addEventListener("DOMContentLoaded", () => {
   const passEdit = document.getElementById("usuario-password");
   const passReqEdit = document.getElementById("password-req-editar");
@@ -1582,7 +1543,6 @@ document.addEventListener("DOMContentLoaded", () => {
       evaluarPassword(val, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });
     });
   }
-
   const passNuevo = document.getElementById("nuevo-password");
   const passReqCrear = document.getElementById("password-req-crear");
   if (passNuevo && passReqCrear) {
