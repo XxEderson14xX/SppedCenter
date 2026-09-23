@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'index.html'
+      - 'assets/**'
   issues:
     types: [opened, edited]
 
+# FIX 1: cancel-in-progress: false para que GitHub Pages no se cancele
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -27,9 +31,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Reestructurar HTML limpio para edición v11.9.11
+      - name: Reestructurar HTML limpio para edicion v11.9.11
         run: |
-          cat << 'EOF' > update_script.js
+          node << 'NODESCRIPT'
           const fs = require("fs");
 
           // 1. Leer y corregir index.html de forma precisa
@@ -37,40 +41,89 @@ jobs:
           html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.11");
           html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
 
-          // Asegurar que el contenedor de requisitos de edición esté fuera de la línea flex
+          // Asegurar que el contenedor de requisitos de edicion este fuera de la linea flex
           if (html.includes('id="usuario-password"')) {
-            // Limpiamos cualquier inyección anterior errónea en el input
+            // Limpiamos cualquier inyeccion anterior erronea en el input
             html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>/g, "");
-            
-            // Reinsertamos el bloque de requisitos justo después del contenedor del grupo de contraseña
+
+            // Reinsertamos el bloque de requisitos justo despues del contenedor del grupo de contrasena
             const targetStr = 'id="usuario-password"';
             const index = html.indexOf(targetStr);
             if (index !== -1) {
-              // Buscamos el cierre del div contenedor de esa sección
               const endDivIndex = html.indexOf('</div>', index);
               if (endDivIndex !== -1) {
                 const insertPos = endDivIndex + 6;
-                const reqHTML = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">✗ Un número (0-9)</span>\n            </div>';
+                const reqHTML = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">&#x2717; Minimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">&#x2717; Una letra minuscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">&#x2717; Una letra mayuscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">&#x2717; Un numero (0-9)</span>\n            </div>';
                 html = html.slice(0, insertPos) + reqHTML + html.slice(insertPos);
               }
             }
           }
           fs.writeFileSync("index.html", html);
 
-          // 2. Refinar estilos CSS para una caja limpia de 100% de ancho
+          // 2. Refinar estilos CSS
           let css = fs.readFileSync("assets/styles.css", "utf8");
           if (!css.includes("v11.9.11")) {
-            css += '\n\n/* v11.9.11 - Estilos limpios de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 10px 14px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 10px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: #64748b;\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
+            css += `
+
+/* v11.9.11 - Estilos limpios de contrasena */
+
+/* FIX 2: Forzar columna en el contenedor padre para que el checkbox
+   y los requisitos NO queden en la misma linea flex */
+#usuario-password {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.password-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 0;
+}
+
+.requisitos-password {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  background: #f8fafc;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  /* Asegura que nunca quede en linea con el checkbox */
+  clear: both;
+  float: none;
+}
+
+.req-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+
+.req-item.valido {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.req-item.invalido {
+  color: #dc2626;
+}
+`;
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          console.log("Reestructuración v11.9.11 aplicada con éxito.");
-          EOF
-          node update_script.js
-          rm update_script.js
+          console.log("Reestructuracion v11.9.11 aplicada con exito.");
+          NODESCRIPT
 
-      - name: Commit & Push Changes
+      - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(ui): Reestructura HTML para alinear cuadro de contraseña en edición v11.9.11"
+          commit_message: "fix(ui): Reestructura HTML y CSS para alinear cuadro de contrasena en edicion v11.9.11"
           branch: main
