@@ -779,6 +779,17 @@ async function abrirCotizacion(id) {
   el("cotizacion-motivo-adeudo").value = ""; el("cotizacion-fecha-compromiso").value = "";
   el("campos-adeudo").style.display = "none"; actualizarVisibilidadPanelCierre();
   estado.conceptosEnEdicion = [];
+  // === Fix: reiniciar la UI de "Descuento general" a su estado neutral
+  // cada vez que se abre una cotización (nueva o existente), para no
+  // arrastrar visualmente el estado de la cotización anterior que se
+  // haya tenido abierta. Si esta cotización SÍ tiene un descuento
+  // guardado, se restaura más abajo con el valor real.
+  {
+    const radioNinguno = document.querySelector('input[name="v9-desc-tipo"][value="ninguno"]');
+    if (radioNinguno) radioNinguno.checked = true;
+    if (el("v9-desc-valor")) { el("v9-desc-valor").value = 0; el("v9-desc-valor").disabled = true; }
+    if (el("v9-desc-texto")) el("v9-desc-texto").textContent = "Sin descuento";
+  }
   el("tabla-pagos-cotizacion").innerHTML = ""; el("lista-seguimiento").innerHTML = ""; el("galeria-archivos").innerHTML = "";
   resetInlineCotizacion();
   if (el("cotizacion-tecnico-asignado")) el("cotizacion-tecnico-asignado").textContent = "Técnico asignado: —";
@@ -802,11 +813,25 @@ async function abrirCotizacion(id) {
     await refrescarAutosDelCliente();
     el("vehiculo-existente-select").value = c.vehiculo_id;
     await cargarArchivosCotizacion(id);
-    const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", id).order("created_at");
+      const { data: detalle } = await sb.from("detalle_cotizacion").select("*").eq("cotizacion_id", id).order("created_at");
     estado.conceptosEnEdicion = (detalle || []).map(d => ({ ...d }));
+    // === Fix: restaurar visualmente el "Descuento general" guardado ===
+    // El descuento ya vivía correctamente en los conceptos y en el total
+    // guardado (c.descuento_total); lo que faltaba era reflejarlo en el
+    // radio/valor de "Descuento general", que antes siempre se veía como
+    // "Sin descuento" al reabrir, sin importar lo que estuviera guardado.
+    // Esto es solo visual: NO se llama a calcDesc(), así que no se toca
+    // el descuento ya guardado en cada concepto.
+    {
+      const montoDescuentoGuardado = Number(c.descuento_total || 0);
+      const radioMonto = document.querySelector('input[name="v9-desc-tipo"][value="monto"]');
+      if (montoDescuentoGuardado > 0 && radioMonto) {
+        radioMonto.checked = true;
+        if (el("v9-desc-valor")) { el("v9-desc-valor").value = montoDescuentoGuardado; el("v9-desc-valor").disabled = false; }
+        if (el("v9-desc-texto")) el("v9-desc-texto").textContent = `$${money(montoDescuentoGuardado)}`;
+      }
+    }
     await cargarPagosCotizacion(id);
-    await cargarSeguimientoCotizacion(id);
-    await cargarTecnicoAsignado(id);
     if (typeof window.bloquearCot === "function") window.bloquearCot();
     if (typeof window.adicionales === "function") await window.adicionales();
   } else {
@@ -1137,8 +1162,9 @@ async function generarPDFCotizacion(cotizacionId) {
     .from("detalle_cotizacion").select("*").eq("cotizacion_id", cotizacionId).order("created_at");
   const { data: pagos } = await sb
     .from("pagos").select("*").eq("cotizacion_id", cotizacionId).eq("estado", "valido");
-  const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
+ const pagado = (pagos || []).reduce((s, p) => s + Number(p.importe), 0);
   const totalGuardado = Number(c.total || 0);
+  const descuentoGuardado = Number(c.descuento_total || 0);
   let base, ivaMonto, importeTotal;
   if (EMPRESA.ivaIncluidoEnTotal) {
     importeTotal = totalGuardado;
@@ -1274,9 +1300,17 @@ async function generarPDFCotizacion(cotizacionId) {
         2: { halign: "right", cellWidth: 110 },
         3: { halign: "right", cellWidth: 110 }
       },
-      margin: { left: M, right: M }
+       margin: { left: M, right: M }
     });
     y = doc.lastAutoTable.finalY + 14;
+  }
+  // === Fix: mostrar en el PDF que sí se aplicó un descuento ===
+  // Antes, aunque el total ya reflejaba el descuento correctamente, el
+  // PDF nunca mostraba ninguna evidencia de que se hubiera aplicado uno.
+  if (descuentoGuardado > 0) {
+    doc.setFont(undefined, "bold"); doc.setFontSize(9); doc.setTextColor(...NEGRO);
+    doc.text(`Descuento aplicado: ${dinero(descuentoGuardado)}`, M, y);
+    y += 16;
   }
   const bh = 18;
   const etW = 105, valW = 120;
