@@ -167,7 +167,12 @@ async function iniciarSesionExitosa(session) {
   el("pantalla-login").style.display = "none";
   el("app-shell").classList.add("activo");
   el("pie-usuario").textContent = (perfil && perfil.nombre_completo) || session.user.email;
-  el("pie-rol").textContent = perfil ? `Rol: ${perfil.rol}` : "";
+   el("pie-rol").textContent = perfil ? `Rol: ${perfil.rol}` : "";
+  // Oculta los módulos marcados como "data-staff-only" (ej. Prospectos)
+  // para cualquier rol que NO sea administrador o recepción.
+  if (perfil && !["administrador","recepcion"].includes(perfil.rol)) {
+    document.querySelectorAll("[data-staff-only]").forEach(n => n.style.display = "none");
+  };
   // === V11.5: Restricción de menú para el rol "tecnico" ===
   // Solo puede ver "Órdenes de trabajo". Todo lo demás del menú se oculta.
   if (perfil && perfil.rol === "tecnico") {
@@ -199,7 +204,7 @@ document.querySelectorAll(".nav-item").forEach(item => {
     item.classList.add("activo");
     document.querySelectorAll(".modulo").forEach(m => m.classList.remove("activo"));
     el("modulo-" + item.dataset.modulo)?.classList.add("activo");
-    const cargas = { inicio:cargarInicio, cotizaciones:cargarCotizaciones, clientes:cargarClientes, vehiculos:cargarVehiculos, catalogo:cargarCatalogo, bitacora:cargarBitacora, usuarios:cargarUsuarios };
+   const cargas = { inicio:cargarInicio, cotizaciones:cargarCotizaciones, clientes:cargarClientes, vehiculos:cargarVehiculos, catalogo:cargarCatalogo, bitacora:cargarBitacora, usuarios:cargarUsuarios, prospectos:cargarProspectos };
     if (cargas[item.dataset.modulo]) cargas[item.dataset.modulo]();
   });
 });
@@ -1583,5 +1588,78 @@ document.addEventListener("DOMContentLoaded", () => {
     passNuevo.addEventListener("input", () => {
       evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
     });
+    // ============================================================================
+// PROSPECTOS (leads de la landing page) · Fase 1
+// ============================================================================
+let _listaProspectos = [];
+const ETIQUETAS_PROSPECTO = { nuevo:"Nuevo", contactado:"Contactado", convertido:"Convertido", descartado:"Descartado" };
+function badgeProspecto(v) {
+  const colores = { nuevo:"naranja", contactado:"azul", convertido:"verde", descartado:"gris" };
+  return `<span class="badge ${colores[v]||"gris"}">${ETIQUETAS_PROSPECTO[v]||v}</span>`;
+}
+async function cargarProspectos(filtro = "") {
+  const tabla = el("tabla-prospectos");
+  if (!tabla) return;
+  tabla.innerHTML = filaSkeleton(7);
+  const { data, error } = await sb.from("prospectos_landing").select("*").order("created_at", { ascending: false });
+  if (error) { tabla.innerHTML = `<tr><td colspan="7" class="vacio-tabla">Error al cargar: ${escHtml(error.message)}</td></tr>`; return; }
+  _listaProspectos = data || [];
+  renderProspectos(filtro);
+}
+function renderProspectos(filtro = "") {
+  const tabla = el("tabla-prospectos");
+  if (!tabla) return;
+  const estadoFiltro = el("filtro-prospecto-estado")?.value || "";
+  let lista = _listaProspectos;
+  const hayFiltro = !!(filtro || estadoFiltro);
+  if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(p => (p.nombre||"").toLowerCase().includes(f) || (p.telefono||"").includes(f)); }
+  if (estadoFiltro) lista = lista.filter(p => p.estado === estadoFiltro);
+  tabla.innerHTML = lista.length ? lista.map(p => {
+    const auto = [p.marca, p.modelo, p.anio].filter(Boolean).join(" ") || "—";
+    const fecha = p.created_at ? new Date(p.created_at).toLocaleDateString("es-MX") : "—";
+    return `<tr><td>${fecha}</td><td>${escHtml(p.nombre)}</td><td>${escHtml(p.telefono)}</td><td>${escHtml(auto)}</td><td>${escHtml(p.servicio_interes)||"—"}</td><td>${badgeProspecto(p.estado)}</td><td><button class="btn secundario pequeno" data-ver-prospecto="${p.id}">Ver</button></td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="vacio-tabla">${hayFiltro ? "No hay prospectos que coincidan con tu búsqueda o filtro." : "Sin prospectos todavía. Aparecerán aquí cuando alguien se registre en la landing page."}</td></tr>`;
+  document.querySelectorAll("[data-ver-prospecto]").forEach(b => b.addEventListener("click", () => abrirModalProspecto(_listaProspectos.find(p => p.id === b.dataset.verProspecto))));
+}
+el("buscar-prospecto")?.addEventListener("input", e => renderProspectos(e.target.value));
+el("filtro-prospecto-estado")?.addEventListener("change", () => renderProspectos(el("buscar-prospecto")?.value || ""));
+function abrirModalProspecto(p) {
+  if (!p) return;
+  el("prospecto-id").value = p.id;
+  el("prospecto-nombre").value = p.nombre || "";
+  el("prospecto-telefono").value = p.telefono || "";
+  el("prospecto-auto").value = [p.marca, p.modelo, p.anio].filter(Boolean).join(" ") || "—";
+  el("prospecto-servicio").value = p.servicio_interes || "—";
+  el("prospecto-mensaje").value = p.mensaje || "";
+  el("prospecto-estado").value = p.estado || "nuevo";
+  el("prospecto-notas").value = p.notas || "";
+  const btnConvertir = el("btn-convertir-prospecto");
+  if (btnConvertir) {
+    btnConvertir.style.display = p.cliente_id ? "none" : "";
+    btnConvertir.textContent = p.cliente_id ? "Ya convertido" : "Convertir a cliente";
   }
+  abrirModal("modal-prospecto");
+}
+el("btn-guardar-prospecto")?.addEventListener("click", async () => {
+  const id = el("prospecto-id").value;
+  if (!id) return;
+  const registro = { estado: el("prospecto-estado").value, notas: el("prospecto-notas").value.trim() || null, atendido_por: estado.usuario.id };
+  const { error } = await sb.from("prospectos_landing").update(registro).eq("id", id);
+  if (error) { mostrarMensaje("mensaje-prospecto", "Error al guardar: " + error.message, "error"); return; }
+  mostrarMensaje("mensaje-prospecto", "Prospecto actualizado correctamente.");
+  await cargarProspectos(el("buscar-prospecto")?.value || "");
+  setTimeout(() => cerrarModal("modal-prospecto"), 900);
+});
+el("btn-convertir-prospecto")?.addEventListener("click", async () => {
+  const id = el("prospecto-id").value;
+  if (!id) return;
+  if (!confirm("¿Convertir este prospecto en un cliente real de SpeedCenter?\n\nSe creará su ficha en el módulo de Clientes.")) return;
+  const { data, error } = await sb.rpc("convertir_prospecto_a_cliente", { p_prospecto_id: id });
+  if (error) { mostrarMensaje("mensaje-prospecto", "Error al convertir: " + error.message, "error"); return; }
+  mostrarMensaje("mensaje-prospecto", "¡Convertido! Ya aparece en el módulo de Clientes.");
+  await cargarDatosBase();
+  await cargarProspectos(el("buscar-prospecto")?.value || "");
+  setTimeout(() => cerrarModal("modal-prospecto"), 1200);
+});
+}
 });
