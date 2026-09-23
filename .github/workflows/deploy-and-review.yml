@@ -27,25 +27,44 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Ejecutar script de actualización v11.9.10
+      - name: Reestructurar HTML limpio para edición v11.9.11
         run: |
           cat << 'EOF' > update_script.js
           const fs = require("fs");
 
-          // 1. Actualizar index.html (versión y placeholders limpios)
+          // 1. Leer y corregir index.html de forma precisa
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.10");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.11");
           html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
+
+          // Asegurar que el contenedor de requisitos de edición esté fuera de la línea flex
+          if (html.includes('id="usuario-password"')) {
+            // Limpiamos cualquier inyección anterior errónea en el input
+            html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>/g, "");
+            
+            // Reinsertamos el bloque de requisitos justo después del contenedor del grupo de contraseña
+            const targetStr = 'id="usuario-password"';
+            const index = html.indexOf(targetStr);
+            if (index !== -1) {
+              // Buscamos el cierre del div contenedor de esa sección
+              const endDivIndex = html.indexOf('</div>', index);
+              if (endDivIndex !== -1) {
+                const insertPos = endDivIndex + 6;
+                const reqHTML = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">✗ Mínimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">✗ Una letra minúscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">✗ Una letra mayúscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">✗ Un número (0-9)</span>\n            </div>';
+                html = html.slice(0, insertPos) + reqHTML + html.slice(insertPos);
+              }
+            }
+          }
           fs.writeFileSync("index.html", html);
 
-          // 2. Aplicar estilos CSS limpios
+          // 2. Refinar estilos CSS para una caja limpia de 100% de ancho
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("v11.9.10")) {
-            css += '\n\n/* v11.9.10 - Estilos de validación de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 8px 12px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 6px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--text-mute);\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
+          if (!css.includes("v11.9.11")) {
+            css += '\n\n/* v11.9.11 - Estilos limpios de contraseña */\n.requisitos-password {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  font-size: 11.5px;\n  background: #f8fafc;\n  padding: 10px 14px;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n  margin-top: 10px;\n  width: 100%;\n  box-sizing: border-box;\n}\n.req-item {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  color: #64748b;\n  transition: all 0.15s ease;\n}\n.req-item.valido {\n  color: #16a34a;\n  font-weight: 600;\n}\n.req-item.invalido {\n  color: #dc2626;\n}\n';
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          console.log("Actualización v11.9.10 aplicada.");
+          console.log("Reestructuración v11.9.11 aplicada con éxito.");
           EOF
           node update_script.js
           rm update_script.js
@@ -53,5 +72,5 @@ jobs:
       - name: Commit & Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(ci): Ajusta concurrencia de GitHub Pages v11.9.10"
+          commit_message: "fix(ui): Reestructura HTML para alinear cuadro de contraseña en edición v11.9.11"
           branch: main
