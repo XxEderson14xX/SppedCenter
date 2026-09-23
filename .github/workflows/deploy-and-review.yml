@@ -4,13 +4,9 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'index.html'
-      - 'assets/**'
   issues:
     types: [opened, edited]
 
-# FIX 1: cancel-in-progress: false para que GitHub Pages no se cancele
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -31,72 +27,69 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Reestructurar HTML limpio para edicion v11.9.11
+      - name: Unificar estetica de contraseñas en ambos modales v11.9.13
         run: |
           node << 'NODESCRIPT'
           const fs = require("fs");
 
-          // 1. Leer y corregir index.html de forma precisa
+          // 1. Actualizar index.html y asegurar clases idénticas para ambos modales
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.11");
-          html = html.replace(/mínimo 6 caracteres/gi, "Ej. Speed2026");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.13");
 
-          // Asegurar que el contenedor de requisitos de edicion este fuera de la linea flex
-          if (html.includes('id="usuario-password"')) {
-            // Limpiamos cualquier inyeccion anterior erronea en el input
-            html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>/g, "");
+          // Limpiamos y normalizamos las estructuras de requisitos en ambos formularios
+          html = html.replace(/<div id="password-req-crear"[\s\S]*?<\/div>/g, "");
+          html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>/g, "");
 
-            // Reinsertamos el bloque de requisitos justo despues del contenedor del grupo de contrasena
-            const targetStr = 'id="usuario-password"';
-            const index = html.indexOf(targetStr);
-            if (index !== -1) {
-              const endDivIndex = html.indexOf('</div>', index);
-              if (endDivIndex !== -1) {
-                const insertPos = endDivIndex + 6;
-                const reqHTML = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">&#x2717; Minimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">&#x2717; Una letra minuscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">&#x2717; Una letra mayuscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">&#x2717; Un numero (0-9)</span>\n            </div>';
-                html = html.slice(0, insertPos) + reqHTML + html.slice(insertPos);
-              }
+          // Insertar en Creación de Usuario
+          if (html.includes('id="nuevo-password"')) {
+            const idx = html.indexOf('id="nuevo-password"');
+            const endDiv = html.indexOf('</div>', idx);
+            if (endDiv !== -1) {
+              const pos = endDiv + 6;
+              const boxCrear = '\n            <div id="password-req-crear" class="requisitos-password" style="display:none;">\n              <span id="req-crear-len" class="req-item invalido">&#x2717; Mínimo 8 caracteres</span>\n              <span id="req-crear-min" class="req-item invalido">&#x2717; Una letra minúscula (a-z)</span>\n              <span id="req-crear-may" class="req-item invalido">&#x2717; Una letra mayúscula (A-Z)</span>\n              <span id="req-crear-num" class="req-item invalido">&#x2717; Un número (0-9)</span>\n            </div>';
+              html = html.slice(0, pos) + boxCrear + html.slice(pos);
             }
           }
+
+          // Insertar en Edición de Usuario
+          if (html.includes('id="usuario-password"')) {
+            const idx2 = html.indexOf('id="usuario-password"');
+            const endDiv2 = html.indexOf('</div>', idx2);
+            if (endDiv2 !== -1) {
+              const pos2 = endDiv2 + 6;
+              const boxEditar = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">&#x2717; Mínimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">&#x2717; Una letra minúscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">&#x2717; Una letra mayúscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">&#x2717; Un número (0-9)</span>\n            </div>';
+              html = html.slice(0, pos2) + boxEditar + html.slice(pos2);
+            }
+          }
+
           fs.writeFileSync("index.html", html);
 
-          // 2. Refinar estilos CSS
+          // 2. Unificar y pulir CSS global para ambos modales
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("v11.9.11")) {
+          if (!css.includes("v11.9.13")) {
             css += `
 
-/* v11.9.11 - Estilos limpios de contrasena */
-
-/* FIX 2: Forzar columna en el contenedor padre para que el checkbox
-   y los requisitos NO queden en la misma linea flex */
-#usuario-password {
+/* v11.9.13 - Estetica unificada para modales de creacion y edicion de usuarios */
+#nuevo-password, #usuario-password {
   display: flex;
   flex-direction: column;
   width: 100%;
-}
-
-.password-field-wrapper {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: 0;
+  grid-column: 1 / -1; /* Ocupa todo el ancho disponible en la rejilla del modal */
 }
 
 .requisitos-password {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 11.5px;
   background: #f8fafc;
   padding: 10px 14px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  margin-top: 10px;
+  margin-top: 8px;
   width: 100%;
   box-sizing: border-box;
-  /* Asegura que nunca quede en linea con el checkbox */
   clear: both;
-  float: none;
 }
 
 .req-item {
@@ -119,11 +112,11 @@ jobs:
             fs.writeFileSync("assets/styles.css", css);
           }
 
-          console.log("Reestructuracion v11.9.11 aplicada con exito.");
+          console.log("Actualización v11.9.13 aplicada con éxito.");
           NODESCRIPT
 
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(ui): Reestructura HTML y CSS para alinear cuadro de contrasena en edicion v11.9.11"
+          commit_message: "fix(ui): Unifica estetica de requisitos de contraseña en creacion y edicion v11.9.13"
           branch: main
