@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'index.html'
+      - 'assets/**'
   issues:
     types: [opened, edited]
 
@@ -27,56 +30,63 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Unificar estetica de contraseñas en ambos modales v11.9.13
+      - name: Unificar estetica y comportamiento de contraseñas v11.9.14
         run: |
           node << 'NODESCRIPT'
           const fs = require("fs");
 
-          // 1. Actualizar index.html y asegurar clases idénticas para ambos modales
+          // ─────────────────────────────────────────────
+          // 1. PATCH index.html
+          // ─────────────────────────────────────────────
           let html = fs.readFileSync("index.html", "utf8");
-          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.13");
+          html = html.replace(/\?v=11\.\d+(\.\d+)?/g, "?v=11.9.14");
 
-          // Limpiamos y normalizamos las estructuras de requisitos en ambos formularios
-          html = html.replace(/<div id="password-req-crear"[\s\S]*?<\/div>/g, "");
-          html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>/g, "");
+          // Limpiar bloques anteriores de requisitos para evitar duplicados
+          html = html.replace(/<div id="password-req-crear"[\s\S]*?<\/div>\s*/g, "");
+          html = html.replace(/<div id="password-req-editar"[\s\S]*?<\/div>\s*/g, "");
 
-          // Insertar en Creación de Usuario
+          const reqBlock = (id) =>
+            `\n<div id="${id}" class="requisitos-password" style="display:none;">\n` +
+            `  <span id="${id}-len" class="req-item invalido">&#x2717; M\u00ednimo 8 caracteres</span>\n` +
+            `  <span id="${id}-min" class="req-item invalido">&#x2717; Una letra min\u00fascula (a-z)</span>\n` +
+            `  <span id="${id}-may" class="req-item invalido">&#x2717; Una letra may\u00fascula (A-Z)</span>\n` +
+            `  <span id="${id}-num" class="req-item invalido">&#x2717; Un n\u00famero (0-9)</span>\n` +
+            `</div>\n`;
+
+          // Insertar bloque CREAR justo después del div que contiene id="nuevo-password"
           if (html.includes('id="nuevo-password"')) {
             const idx = html.indexOf('id="nuevo-password"');
-            const endDiv = html.indexOf('</div>', idx);
-            if (endDiv !== -1) {
-              const pos = endDiv + 6;
-              const boxCrear = '\n            <div id="password-req-crear" class="requisitos-password" style="display:none;">\n              <span id="req-crear-len" class="req-item invalido">&#x2717; Mínimo 8 caracteres</span>\n              <span id="req-crear-min" class="req-item invalido">&#x2717; Una letra minúscula (a-z)</span>\n              <span id="req-crear-may" class="req-item invalido">&#x2717; Una letra mayúscula (A-Z)</span>\n              <span id="req-crear-num" class="req-item invalido">&#x2717; Un número (0-9)</span>\n            </div>';
-              html = html.slice(0, pos) + boxCrear + html.slice(pos);
+            const end = html.indexOf('</div>', idx);
+            if (end !== -1) {
+              const pos = end + 6;
+              html = html.slice(0, pos) + reqBlock("password-req-crear") + html.slice(pos);
             }
           }
 
-          // Insertar en Edición de Usuario
+          // Insertar bloque EDITAR justo después del div que contiene id="usuario-password"
           if (html.includes('id="usuario-password"')) {
             const idx2 = html.indexOf('id="usuario-password"');
-            const endDiv2 = html.indexOf('</div>', idx2);
-            if (endDiv2 !== -1) {
-              const pos2 = endDiv2 + 6;
-              const boxEditar = '\n            <div id="password-req-editar" class="requisitos-password" style="display:none;">\n              <span id="req-edit-len" class="req-item invalido">&#x2717; Mínimo 8 caracteres</span>\n              <span id="req-edit-min" class="req-item invalido">&#x2717; Una letra minúscula (a-z)</span>\n              <span id="req-edit-may" class="req-item invalido">&#x2717; Una letra mayúscula (A-Z)</span>\n              <span id="req-edit-num" class="req-item invalido">&#x2717; Un número (0-9)</span>\n            </div>';
-              html = html.slice(0, pos2) + boxEditar + html.slice(pos2);
+            const end2 = html.indexOf('</div>', idx2);
+            if (end2 !== -1) {
+              const pos2 = end2 + 6;
+              html = html.slice(0, pos2) + reqBlock("password-req-editar") + html.slice(pos2);
             }
           }
 
           fs.writeFileSync("index.html", html);
+          console.log("[OK] index.html actualizado");
 
-          // 2. Unificar y pulir CSS global para ambos modales
+          // ─────────────────────────────────────────────
+          // 2. PATCH assets/styles.css
+          // ─────────────────────────────────────────────
           let css = fs.readFileSync("assets/styles.css", "utf8");
-          if (!css.includes("v11.9.13")) {
-            css += `
 
-/* v11.9.13 - Estetica unificada para modales de creacion y edicion de usuarios */
-#nuevo-password, #usuario-password {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  grid-column: 1 / -1; /* Ocupa todo el ancho disponible en la rejilla del modal */
-}
+          // Eliminar versiones anteriores del bloque para no acumular
+          css = css.replace(/\/\* v11\.9\.\d+ -[\s\S]*?\/\* END v11\.9\.\d+ \*\//g, "");
 
+          css += `
+
+/* v11.9.14 - Estilos unificados de requisitos de contrasena */
 .requisitos-password {
   display: flex;
   flex-direction: column;
@@ -85,38 +95,145 @@ jobs:
   background: #f8fafc;
   padding: 10px 14px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #e2e8f0);
   margin-top: 8px;
   width: 100%;
   box-sizing: border-box;
-  clear: both;
 }
-
 .req-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
   transition: all 0.15s ease;
 }
-
-.req-item.valido {
-  color: #16a34a;
-  font-weight: 600;
-}
-
-.req-item.invalido {
-  color: #dc2626;
-}
+.req-item.valido  { color: #16a34a; font-weight: 600; }
+.req-item.invalido { color: #dc2626; }
+/* END v11.9.14 */
 `;
-            fs.writeFileSync("assets/styles.css", css);
+          fs.writeFileSync("assets/styles.css", css);
+          console.log("[OK] styles.css actualizado");
+
+          // ─────────────────────────────────────────────
+          // 3. PATCH assets/app.js  ← NUEVO: lógica JS unificada
+          //    Si el proyecto usa otro nombre de archivo JS,
+          //    cambia "assets/app.js" por el correcto.
+          // ─────────────────────────────────────────────
+          const jsFiles = ["assets/app.js", "assets/main.js", "assets/script.js"];
+          let jsPath = null;
+          for (const f of jsFiles) {
+            if (fs.existsSync(f)) { jsPath = f; break; }
           }
 
-          console.log("Actualización v11.9.13 aplicada con éxito.");
+          const passwordLogic = `
+// ── v11.9.14: Validación unificada de contraseña (crear y editar) ──────────
+(function () {
+  /**
+   * Conecta un input de contraseña con su caja de requisitos.
+   * - El cuadro permanece OCULTO hasta que el usuario escribe el primer carácter.
+   * - Se actualiza en tiempo real con cada pulsación de tecla.
+   * @param {string} inputId   - id del <input> de contraseña
+   * @param {string} boxId     - id del <div> de requisitos
+   */
+  function bindPasswordReqs(inputId, boxId) {
+    const input = document.getElementById(inputId);
+    const box   = document.getElementById(boxId);
+    if (!input || !box) return;
+
+    // Asegurar que el cuadro empieza oculto siempre
+    box.style.display = "none";
+
+    // Reiniciar el cuadro cuando el modal se vuelva a abrir
+    // (por si el usuario abrió, cerró y volvió a abrir)
+    input.addEventListener("focus", function () {
+      if (input.value === "") box.style.display = "none";
+    });
+
+    input.addEventListener("input", function () {
+      const val = input.value;
+
+      // Mostrar el cuadro solo cuando hay contenido
+      box.style.display = val.length > 0 ? "flex" : "none";
+
+      // Helpers de validación
+      const checks = {
+        len: val.length >= 8,
+        min: /[a-z]/.test(val),
+        may: /[A-Z]/.test(val),
+        num: /[0-9]/.test(val),
+      };
+
+      // Actualizar cada ítem
+      Object.entries(checks).forEach(([key, ok]) => {
+        const span = document.getElementById(boxId + "-" + key);
+        if (!span) return;
+        span.classList.toggle("valido",   ok);
+        span.classList.toggle("invalido", !ok);
+        // Cambiar símbolo ✓ / ✗
+        span.textContent = span.textContent.replace(/^[✓✗&#x2713;&#x2717;]\\s*/, "");
+        span.textContent = (ok ? "✓ " : "✗ ") + span.textContent.replace(/^[✓✗]\\s*/, "");
+      });
+    });
+
+    // Al limpiar el input desde fuera (ej. botón Restablecer),
+    // volver a ocultar el cuadro y resetear los íconos
+    const observer = new MutationObserver(function () {
+      if (input.value === "") {
+        box.style.display = "none";
+        box.querySelectorAll(".req-item").forEach(function (span) {
+          span.classList.remove("valido");
+          span.classList.add("invalido");
+          span.textContent = "✗ " + span.textContent.replace(/^[✓✗]\\s*/, "");
+        });
+      }
+    });
+    observer.observe(input, { attributes: true, attributeFilter: ["value"] });
+  }
+
+  // Esperar a que el DOM esté listo
+  function init() {
+    bindPasswordReqs("nuevo-password",   "password-req-crear");
+    bindPasswordReqs("usuario-password", "password-req-editar");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+// ── END v11.9.14 ─────────────────────────────────────────────────────────────
+`;
+
+          if (jsPath) {
+            let js = fs.readFileSync(jsPath, "utf8");
+
+            // Eliminar versión anterior del bloque si existe
+            js = js.replace(/\/\/ ── v11\.9\.\d+: Validaci[\s\S]*?\/\/ ── END v11\.9\.\d+ ─+\n?/g, "");
+
+            js += passwordLogic;
+            fs.writeFileSync(jsPath, js);
+            console.log("[OK] " + jsPath + " actualizado con lógica JS unificada");
+          } else {
+            // Si no existe un JS externo, inyectar el bloque antes de </body> en el HTML
+            let html2 = fs.readFileSync("index.html", "utf8");
+            // Eliminar inyección anterior
+            html2 = html2.replace(/<!-- v11\.9\.\d+-js -->[\s\S]*?<!-- END v11\.9\.\d+-js -->/g, "");
+
+            const scriptTag =
+              "<!-- v11.9.14-js -->\n<script>\n" +
+              passwordLogic +
+              "\n</script>\n<!-- END v11.9.14-js -->";
+
+            html2 = html2.replace("</body>", scriptTag + "\n</body>");
+            fs.writeFileSync("index.html", html2);
+            console.log("[OK] Lógica JS inyectada en index.html (no se encontró archivo JS externo)");
+          }
+
+          console.log("Actualización v11.9.14 completada.");
           NODESCRIPT
 
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "fix(ui): Unifica estetica de requisitos de contraseña en creacion y edicion v11.9.13"
+          commit_message: "fix(ui): Unifica comportamiento y estetica de requisitos de contrasena v11.9.14"
           branch: main
