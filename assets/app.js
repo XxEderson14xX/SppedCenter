@@ -1588,6 +1588,8 @@ document.addEventListener("DOMContentLoaded", () => {
     passNuevo.addEventListener("input", () => {
       evaluarPassword(passNuevo.value, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
     });
+}
+});
     // ============================================================================
 // PROSPECTOS (leads de la landing page) · Fase 1
 // ============================================================================
@@ -1660,6 +1662,4 @@ el("btn-convertir-prospecto")?.addEventListener("click", async () => {
   await cargarDatosBase();
   await cargarProspectos(el("buscar-prospecto")?.value || "");
   setTimeout(() => cerrarModal("modal-prospecto"), 1200);
-});
-}
 });
