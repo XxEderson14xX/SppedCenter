@@ -194,8 +194,24 @@ async function adicionales(){
 }
 $('btn-v9-adicional')?.addEventListener('click',()=>abrirModal('modal-v9-adicional'));
 $('v9-guardar-adicional')?.addEventListener('click',async()=>{
-  const {error}=await sb.from('cotizacion_adicionales').insert({cotizacion_id:$('cotizacion-id').value,descripcion:$('v9-ad-desc').value.trim(),cantidad:Number($('v9-ad-cant').value||1),precio_unitario:Number($('v9-ad-precio').value||0),observacion:$('v9-ad-obs').value.trim()||null,created_by:estado.usuario.id});
-  if(!error){cerrarModal('modal-v9-adicional');adicionales();}
+  const btn = $('v9-guardar-adicional');
+  if (btn?.disabled) return;
+  const orig = btn ? btn.textContent : 'Guardar';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+  try {
+    const desc = $('v9-ad-desc')?.value.trim();
+    if (!desc) { alert('Escribe la descripción del adicional.'); return; }
+    const cant = Math.max(1, Math.floor(Number($('v9-ad-cant')?.value || 1)));
+    const precio = Math.max(0, Number($('v9-ad-precio')?.value || 0));
+    const obs = $('v9-ad-obs')?.value.trim() || null;
+    const {error}=await sb.from('cotizacion_adicionales').insert({cotizacion_id:$('cotizacion-id').value,descripcion:desc,cantidad:cant,precio_unitario:precio,observacion:obs,created_by:estado.usuario?.id});
+    if(!error){cerrarModal('modal-v9-adicional');adicionales();}
+    else { alert('Error al guardar adicional: ' + error.message); }
+  } catch(e) {
+    alert('Error inesperado: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
 });
 async function cargarOT(){
   if($('tabla-ordenes')) $('tabla-ordenes').innerHTML = filaSkeleton(7);
@@ -565,10 +581,20 @@ async function prestamo(id){
   abrirModal('modal-v9-prestamo');
 }
 $('v9-confirmar-prestamo')?.addEventListener('click',async()=>{
+  const btn = $('v9-confirmar-prestamo');
+  if (btn?.disabled) return;
+  const orig = btn ? btn.textContent : 'Prestar';
   const tecnico=$('v9-prestamo-tecnico')?.value||'';if(!tecnico){alert('Selecciona un técnico.');return;}
-  const {error}=await sb.rpc('prestar_herramienta',{p_herramienta_id:$('v9-prestamo-id').value,p_tecnico_id:tecnico,p_orden_id:$('v9-prestamo-ot').value||null,p_observacion:$('v9-prestamo-obs').value||null});
-  if(error){console.error('Error al prestar herramienta:',error);alert(error.message||'No fue posible prestar la herramienta.');return;}
-  cerrarModal('modal-v9-prestamo');await cargarHerramientas();dashboard();
+  if (btn) { btn.disabled = true; btn.textContent = 'Prestando...'; }
+  try {
+    const {error}=await sb.rpc('prestar_herramienta',{p_herramienta_id:$('v9-prestamo-id').value,p_tecnico_id:tecnico,p_orden_id:$('v9-prestamo-ot').value||null,p_observacion:$('v9-prestamo-obs').value||null});
+    if(error){console.error('Error al prestar herramienta:',error);alert(error.message||'No fue posible prestar la herramienta.');return;}
+    cerrarModal('modal-v9-prestamo');await cargarHerramientas();dashboard();
+  } catch(e) {
+    alert('Error inesperado al prestar herramienta: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
 });
 function abrirDevolucion(id){
   if($('modal-v11-devolucion')&&$('v11-devolucion-id')){$('v11-devolucion-id').value=id;if($('v11-devolucion-obs'))$('v11-devolucion-obs').value='';limpiarMensajeV11('v11-devolucion-mensaje');abrirModal('modal-v11-devolucion');return;}
