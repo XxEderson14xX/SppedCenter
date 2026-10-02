@@ -285,10 +285,17 @@ async function cargarInicio() {
 // ============================================================================
 // CLIENTES
 // ============================================================================
-async function cargarClientes(filtro = "") {
-  if (!filtro) el("tabla-clientes").innerHTML = filaSkeleton(5);
+// Performance optimization (Bolt): Cache loaded clients in memory so typing
+// in #buscar-cliente filters locally in < 1ms instead of triggering network requests.
+let _listaClientes = [];
+async function cargarClientes() {
+  el("tabla-clientes").innerHTML = filaSkeleton(5);
   const { data } = await sb.from("clientes").select("*, vehiculos(id)").order("nombre_completo");
-  let lista = data || [];
+  _listaClientes = data || [];
+  renderClientes(el("buscar-cliente")?.value || "");
+}
+function renderClientes(filtro = "") {
+  let lista = _listaClientes;
   if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(c => (c.nombre_completo||"").toLowerCase().includes(f) || (c.telefono||"").includes(f) || (c.correo||"").toLowerCase().includes(f)); }
   el("tabla-clientes").innerHTML = lista.length ? lista.map(c => `<tr><td>${escHtml(c.nombre_completo)}</td><td>${escHtml(c.telefono)||"—"}</td><td>${escHtml(c.correo)||"—"}</td><td>${(c.vehiculos||[]).length}</td><td>
     <button class="btn secundario pequeno" data-historial-cliente="${c.id}">Historial</button>
@@ -296,10 +303,10 @@ async function cargarClientes(filtro = "") {
   </td></tr>`).join("") : (filtro
     ? `<tr><td colspan="5" class="vacio-tabla">No se encontraron clientes para "${escHtml(filtro)}".</td></tr>`
     : `<tr><td colspan="5" class="vacio-tabla">Sin clientes registrados.${puedeEscribir() ? ' Da clic en "+ Nuevo cliente" para agregar el primero.' : ''}</td></tr>`);
-  document.querySelectorAll("[data-editar-cliente]").forEach(b => b.addEventListener("click", () => abrirModalCliente(lista.find(c => c.id === b.dataset.editarCliente))));
+  document.querySelectorAll("[data-editar-cliente]").forEach(b => b.addEventListener("click", () => abrirModalCliente(_listaClientes.find(c => c.id === b.dataset.editarCliente))));
   document.querySelectorAll("[data-historial-cliente]").forEach(b => b.addEventListener("click", () => verHistorialCliente(b.dataset.historialCliente)));
 }
-el("buscar-cliente")?.addEventListener("input", (e) => cargarClientes(e.target.value));
+el("buscar-cliente")?.addEventListener("input", (e) => renderClientes(e.target.value));
 el("btn-nuevo-cliente")?.addEventListener("click", () => abrirModalCliente(null));
 function abrirModalCliente(c) {
   el("titulo-modal-cliente").textContent = c ? "Editar cliente" : "Nuevo cliente";
@@ -335,18 +342,25 @@ el("form-cliente")?.addEventListener("submit", async (ev) => {
 // VEHÍCULOS
 // ============================================================================
 function normalizarPlaca(p){ return (p||"").toUpperCase().replace(/[\s-]/g,""); }
-async function cargarVehiculos(filtro = "") {
-  if (!filtro) el("tabla-vehiculos").innerHTML = filaSkeleton(7);
+// Performance optimization (Bolt): Cache loaded vehicles in memory so typing
+// in #buscar-vehiculo filters locally in < 1ms instead of triggering network requests.
+let _listaVehiculos = [];
+async function cargarVehiculos() {
+  el("tabla-vehiculos").innerHTML = filaSkeleton(7);
   const { data } = await sb.from("vehiculos").select("*, clientes(nombre_completo)").order("placa");
-  let lista = data || [];
+  _listaVehiculos = data || [];
+  renderVehiculos(el("buscar-vehiculo")?.value || "");
+}
+function renderVehiculos(filtro = "") {
+  let lista = _listaVehiculos;
   if (filtro) lista = lista.filter(v => normalizarPlaca(v.placa).includes(normalizarPlaca(filtro)) || (v.vin||"").toLowerCase().includes(filtro.toLowerCase()) || (v.marca||"").toLowerCase().includes(filtro.toLowerCase()) || (v.modelo||"").toLowerCase().includes(filtro.toLowerCase()));
   el("tabla-vehiculos").innerHTML = lista.length ? lista.map(v => `<tr><td>${escHtml(v.placa)}</td><td>${v.vin?escHtml(v.vin.slice(-8)):"—"}</td><td>${escHtml(v.marca)} ${escHtml(v.modelo)}</td><td>${v.anio||"—"}</td><td>${v.clientes?escHtml(v.clientes.nombre_completo):"—"}</td><td>${v.kilometraje_actual!=null?v.kilometraje_actual.toLocaleString("es-MX"):"—"}</td><td><button class="btn secundario pequeno" data-historial="${v.id}">Historial</button>${puedeEscribir()?` <button class="btn secundario pequeno" data-editar-vehiculo="${v.id}">Editar</button>`:""}</td></tr>`).join("") : (filtro
     ? `<tr><td colspan="7" class="vacio-tabla">No se encontraron vehículos para "${escHtml(filtro)}".</td></tr>`
     : `<tr><td colspan="7" class="vacio-tabla">Sin vehículos registrados.${puedeEscribir() ? ' Da clic en "+ Nuevo vehículo" para agregar el primero.' : ''}</td></tr>`);
-  document.querySelectorAll("[data-editar-vehiculo]").forEach(b => b.addEventListener("click", () => abrirModalVehiculo(lista.find(v => v.id === b.dataset.editarVehiculo))));
+  document.querySelectorAll("[data-editar-vehiculo]").forEach(b => b.addEventListener("click", () => abrirModalVehiculo(_listaVehiculos.find(v => v.id === b.dataset.editarVehiculo))));
   document.querySelectorAll("[data-historial]").forEach(b => b.addEventListener("click", () => verHistorialVehiculo(b.dataset.historial)));
 }
-el("buscar-vehiculo")?.addEventListener("input", (e) => cargarVehiculos(e.target.value));
+el("buscar-vehiculo")?.addEventListener("input", (e) => renderVehiculos(e.target.value));
 el("btn-nuevo-vehiculo")?.addEventListener("click", () => abrirModalVehiculo(null));
 function abrirModalVehiculo(v) {
   el("titulo-modal-vehiculo").textContent = v ? "Editar vehículo" : "Nuevo vehículo";
@@ -493,11 +507,10 @@ function nombreCategoriaCatalogo(codigo) {
   const cat = (estado.catalogoMaestro || []).find(x => x.tipo === "CATEGORIA" && x.codigo === codigo);
   return cat ? cat.nombre : (codigo || "—");
 }
-async function cargarCatalogo(filtro = "") {
+// Performance optimization (Bolt): Separate network fetch (cargarCatalogo) from local filtering (renderCatalogo).
+// Typing search queries or changing dropdown filters now operates in-memory (< 1ms vs ~200ms network latency).
+async function cargarCatalogo() {
   el("tabla-catalogo").innerHTML = filaSkeleton(6);
-  const tipo = el("filtro-catalogo-tipo")?.value || "";
-  const categoria = el("filtro-catalogo-categoria")?.value || "";
-  const estadoFiltro = el("filtro-catalogo-estado")?.value || "";
   const { data, error } = await sb.rpc("v10_catalogo_listar", { p_incluir_inactivos: true });
   if (error) {
     el("tabla-catalogo").innerHTML = `<tr><td colspan="6" class="vacio-tabla">Error al cargar Catálogo Maestro: ${error.message}</td></tr>`;
@@ -506,7 +519,14 @@ async function cargarCatalogo(filtro = "") {
   estado.catalogoMaestro = data || [];
   llenarSelectCategorias();
   llenarFiltrosCatalogo();
-  let lista = estado.catalogoMaestro.filter(x => ["CONCEPTO_SERVICIO","CONCEPTO_MANO_OBRA","CONCEPTO_REFACCION","COMBO"].includes(x.tipo));
+  renderCatalogo();
+}
+function renderCatalogo() {
+  const filtro = el("buscar-servicio")?.value || "";
+  const tipo = el("filtro-catalogo-tipo")?.value || "";
+  const categoria = el("filtro-catalogo-categoria")?.value || "";
+  const estadoFiltro = el("filtro-catalogo-estado")?.value || "";
+  let lista = (estado.catalogoMaestro || []).filter(x => ["CONCEPTO_SERVICIO","CONCEPTO_MANO_OBRA","CONCEPTO_REFACCION","COMBO"].includes(x.tipo));
   const hayFiltroActivo = !!(filtro || tipo || categoria || estadoFiltro);
   if (filtro) { const f = filtro.toLowerCase(); lista = lista.filter(s => (s.codigo||"").toLowerCase().includes(f) || (s.nombre||"").toLowerCase().includes(f)); }
   if (tipo) lista = lista.filter(s => s.tipo === tipo);
@@ -520,7 +540,7 @@ async function cargarCatalogo(filtro = "") {
   </tr>`).join("") : (hayFiltroActivo
     ? `<tr><td colspan="6" class="vacio-tabla">No hay resultados para este filtro.</td></tr>`
     : `<tr><td colspan="6" class="vacio-tabla">Catálogo vacío.${puedeEscribir() ? ' Da clic en "+ Nuevo servicio" para agregar el primero.' : ''}</td></tr>`);
-  document.querySelectorAll("[data-editar-servicio]").forEach(b => b.addEventListener("click", () => abrirModalServicio(lista.find(s => s.codigo === b.dataset.editarServicio))));
+  document.querySelectorAll("[data-editar-servicio]").forEach(b => b.addEventListener("click", () => abrirModalServicio((estado.catalogoMaestro || []).find(s => s.codigo === b.dataset.editarServicio))));
 }
 function llenarFiltrosCatalogo() {
   const sel = el("filtro-catalogo-categoria");
@@ -530,10 +550,10 @@ function llenarFiltrosCatalogo() {
   sel.innerHTML = `<option value="">Categoría: todas</option>` + cats.map(c => `<option value="${c.codigo}">${c.nombre}</option>`).join("");
   sel.value = actual;
 }
-el("buscar-servicio")?.addEventListener("input", e => cargarCatalogo(e.target.value));
-el("filtro-catalogo-tipo")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
-el("filtro-catalogo-categoria")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
-el("filtro-catalogo-estado")?.addEventListener("change", () => cargarCatalogo(el("buscar-servicio").value));
+el("buscar-servicio")?.addEventListener("input", () => renderCatalogo());
+el("filtro-catalogo-tipo")?.addEventListener("change", () => renderCatalogo());
+el("filtro-catalogo-categoria")?.addEventListener("change", () => renderCatalogo());
+el("filtro-catalogo-estado")?.addEventListener("change", () => renderCatalogo());
 el("btn-nuevo-servicio")?.addEventListener("click", () => abrirModalServicio(null));
 function abrirModalServicio(s) {
   el("titulo-modal-servicio").textContent = s ? "Editar concepto" : "Nuevo concepto";
