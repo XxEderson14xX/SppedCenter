@@ -1027,7 +1027,7 @@ async function cargarPagosCotizacion(cotizacionId) {
   const validos = (pagos||[]).filter(p => p.estado === "valido");
   const saldo = fixFloat((cot ? cot.total : 0) - validos.reduce((s,p)=>fixFloat(s + Number(p.importe)),0));
   el("cotizacion-saldo").textContent = money(saldo);
-  el("tabla-pagos-cotizacion").innerHTML = (pagos||[]).map(p => `<tr><td>${p.fecha}</td><td>$${money(p.importe)}</td><td>${p.metodo}</td><td>${p.referencia||"—"}</td><td>${p.estado}</td><td>${p.estado==='valido'&&esAdmin()?`<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>`:""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin pagos registrados.</td></tr>`;
+  el("tabla-pagos-cotizacion").innerHTML = (pagos||[]).map(p => `<tr><td>${escHtml(p.fecha)}</td><td>$${money(p.importe)}</td><td>${escHtml(p.metodo)}</td><td>${p.referencia?escHtml(p.referencia):"—"}</td><td>${escHtml(p.estado)}</td><td>${p.estado==='valido'&&esAdmin()?`<button class="btn secundario pequeno" data-reversar="${p.id}">Reversar</button>`:""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio-tabla">Sin pagos registrados.</td></tr>`;
   document.querySelectorAll("[data-reversar]").forEach(b => b.addEventListener("click", async () => { const motivo = prompt("Motivo de la reversión (obligatorio):"); if (!motivo) return; await sb.from("pagos").update({ estado:"reversado" }).eq("id", b.dataset.reversar); await registrarBitacora("pagos", b.dataset.reversar, "reversar", null, { motivo }); cargarPagosCotizacion(cotizacionId); }));
 }
 el("btn-agregar-pago")?.addEventListener("click", async () => {
