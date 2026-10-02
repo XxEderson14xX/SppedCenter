@@ -882,7 +882,7 @@ function renderConceptos() {
     const fila = `
     <tr class="${esAdicional ? 'fila-adicional' : ''}">
       <td><select data-campo="tipo" data-i="${i}">${[["servicio","Servicio"],["mano_obra","Mano de obra"],["consumible","Consumible"],["refaccion_libre","Refacción"],["descuento","Descuento"],["nota","Nota"]].map(([v,txt])=>`<option value="${v}" ${cpt.tipo===v?"selected":""}>${txt}</option>`).join("")}</select></td>
-      <td><input data-campo="descripcion" data-i="${i}" value="${descripcionMostrar}"></td>
+      <td><input data-campo="descripcion" data-i="${i}" value="${escHtml(descripcionMostrar)}"></td>
       <td><input type="number" step="1" min="1" data-campo="cantidad" data-i="${i}" value="${cpt.cantidad||1}"></td>
       <td><input type="number" step="0.01" min="0" data-campo="precio_unitario" data-i="${i}" value="${cpt.precio_unitario||0}"></td>
       <td><input type="number" step="0.01" min="0" data-campo="descuento" data-i="${i}" value="${cpt.descuento||0}"></td>
