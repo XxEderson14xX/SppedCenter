@@ -1,0 +1,4 @@
+/* Estilos específicos para modal de cotización */
+#modal-cotizacion .modal-caja {
+  max-width: 900px;
+}

@@ -1,0 +1,4 @@
+/* Estilos específicos para usuarios y permisos */
+#modal-crear-usuario .modal-caja {
+  max-width: 650px;
+}
