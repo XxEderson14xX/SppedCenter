@@ -659,6 +659,10 @@ document.querySelectorAll(".pestana").forEach(p => p.addEventListener("click", (
   p.classList.add("activa");
   ["datos","pagos","seguimiento","archivos"].forEach(n => el("pestana-"+n).style.display = n === p.dataset.pestana ? "block" : "none");
   actualizarGatePagos();
+  if (p.dataset.pestana === "archivos") {
+    const id = el("cotizacion-id")?.value;
+    if (id) cargarArchivosCotizacion(id);
+  }
 }));
 el("btn-nueva-cotizacion")?.addEventListener("click", () => abrirCotizacion(null));
 function actualizarGatePagos() {
