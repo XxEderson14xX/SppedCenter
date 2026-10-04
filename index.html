@@ -424,6 +424,20 @@
       </header>
       <div class="barra-acciones">
         <input type="search" id="buscar-servicio" placeholder="Buscar por código o nombre…">
+        <select id="filtro-catalogo-tipo">
+          <option value="">Tipo: todos</option>
+          <option value="CONCEPTO_SERVICIO">Servicio</option>
+          <option value="CONCEPTO_MANO_OBRA">Mano de obra</option>
+          <option value="CONCEPTO_REFACCION">Refacción / consumible</option>
+        </select>
+        <select id="filtro-catalogo-categoria">
+          <option value="">Categoría: todas</option>
+        </select>
+        <select id="filtro-catalogo-estado">
+          <option value="">Estado: todos</option>
+          <option value="activo">Activos</option>
+          <option value="inactivo">Inactivos</option>
+        </select>
       </div>
       <article class="panel">
         <table class="tabla">
