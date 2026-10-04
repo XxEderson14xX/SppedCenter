@@ -214,18 +214,24 @@ el("btn-logo-home")?.addEventListener("click", (ev) => {
   document.querySelector('.nav-item[data-modulo="inicio"]')?.click();
 });
 async function cargarDatosBase() {
-  const [{ data: clientes }, { data: vehiculos }, { data: catalogo, error: errorCatalogo }] = await Promise.all([
-    sb.from("clientes").select("*").order("nombre_completo"),
-    sb.from("vehiculos").select("*, clientes(nombre_completo)").order("placa"),
-    sb.rpc("v10_catalogo_listar", { p_incluir_inactivos: true }),
-  ]);
-  estado.clientes = clientes || [];
-  estado.vehiculos = vehiculos || [];
-  estado.catalogoMaestro = errorCatalogo ? [] : (catalogo || []);
-  estado.servicios = [];
-  estado.categorias = estado.catalogoMaestro.filter(x => x.tipo === "CATEGORIA");
-  llenarSelect("cliente", "vehiculo-cliente");
-  llenarSelectCategorias();
+  try {
+    const [{ data: clientes, error: errC }, { data: vehiculos, error: errV }, { data: catalogo, error: errorCatalogo }] = await Promise.all([
+      sb.from("clientes").select("*").order("nombre_completo"),
+      sb.from("vehiculos").select("*, clientes(nombre_completo)").order("placa"),
+      sb.rpc("v10_catalogo_listar", { p_incluir_inactivos: true }),
+    ]);
+    if (errC) console.error("Error al cargar clientes:", errC);
+    if (errV) console.error("Error al cargar vehículos:", errV);
+    estado.clientes = clientes || [];
+    estado.vehiculos = vehiculos || [];
+    estado.catalogoMaestro = errorCatalogo ? [] : (catalogo || []);
+    estado.servicios = [];
+    estado.categorias = estado.catalogoMaestro.filter(x => x.tipo === "CATEGORIA");
+    llenarSelect("cliente", "vehiculo-cliente");
+    llenarSelectCategorias();
+  } catch (e) {
+    console.error("Error inesperado en cargarDatosBase:", e);
+  }
 }
 function llenarSelect(tipo, idSelect) {
   const sel = el(idSelect); if (!sel) return;
@@ -309,6 +315,7 @@ function renderClientes(filtro = "") {
 el("buscar-cliente")?.addEventListener("input", (e) => renderClientes(e.target.value));
 el("btn-nuevo-cliente")?.addEventListener("click", () => abrirModalCliente(null));
 function abrirModalCliente(c) {
+  const msg = el("mensaje-cliente"); if (msg) msg.innerHTML = "";
   el("titulo-modal-cliente").textContent = c ? "Editar cliente" : "Nuevo cliente";
   el("cliente-id").value = c ? c.id : "";
   el("cliente-nombre").value = c ? c.nombre_completo : "";
@@ -321,22 +328,31 @@ function abrirModalCliente(c) {
 }
 el("form-cliente")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const id = el("cliente-id").value;
-  const telNuevo = el("cliente-telefono").value.trim();
-  const registro = { nombre_completo: el("cliente-nombre").value.trim(), telefono: telNuevo || null, correo: el("cliente-correo").value.trim() || null, rfc: el("cliente-rfc").value.trim() || null, direccion: el("cliente-direccion").value.trim() || null, observaciones: el("cliente-observaciones").value.trim() || null };
-  let error, data;
-  if (id) {
-    const anterior = estado.clientes.find(c => c.id === id);
-    ({ data, error } = await sb.from("clientes").update(registro).eq("id", id).select().single());
-    if (!error && anterior && (anterior.telefono || "") !== (telNuevo || "") && telNuevo) await sb.rpc("cambiar_telefono", { p_cliente_id: id, p_nuevo_tel: telNuevo });
-    if (!error) await registrarBitacora("clientes", id, "actualizar", null, registro);
-  } else {
-    registro.created_by = estado.usuario.id;
-    ({ data, error } = await sb.from("clientes").insert(registro).select().single());
-    if (!error) await registrarBitacora("clientes", data.id, "crear", null, registro);
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const txtOriginal = btn ? btn.textContent : "Guardar";
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const id = el("cliente-id").value;
+    const telNuevo = el("cliente-telefono").value.trim();
+    const registro = { nombre_completo: el("cliente-nombre").value.trim(), telefono: telNuevo || null, correo: el("cliente-correo").value.trim() || null, rfc: el("cliente-rfc").value.trim() || null, direccion: el("cliente-direccion").value.trim() || null, observaciones: el("cliente-observaciones").value.trim() || null };
+    let error, data;
+    if (id) {
+      const anterior = estado.clientes.find(c => c.id === id);
+      ({ data, error } = await sb.from("clientes").update(registro).eq("id", id).select().single());
+      if (!error && anterior && (anterior.telefono || "") !== (telNuevo || "") && telNuevo) await sb.rpc("cambiar_telefono", { p_cliente_id: id, p_nuevo_tel: telNuevo });
+      if (!error) await registrarBitacora("clientes", id, "actualizar", null, registro);
+    } else {
+      registro.created_by = estado.usuario ? estado.usuario.id : null;
+      ({ data, error } = await sb.from("clientes").insert(registro).select().single());
+      if (!error) await registrarBitacora("clientes", data.id, "crear", null, registro);
+    }
+    if (error) { mostrarMensaje("mensaje-cliente", "Error al guardar: " + error.message, "error"); return; }
+    cerrarModal("modal-cliente"); await cargarDatosBase(); cargarClientes();
+  } catch (e) {
+    mostrarMensaje("mensaje-cliente", "Error inesperado: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
   }
-  if (error) { mostrarMensaje("mensaje-cliente", "Error al guardar: " + error.message, "error"); return; }
-  cerrarModal("modal-cliente"); await cargarDatosBase(); cargarClientes();
 });
 // ============================================================================
 // VEHÍCULOS
@@ -363,6 +379,7 @@ function renderVehiculos(filtro = "") {
 el("buscar-vehiculo")?.addEventListener("input", (e) => renderVehiculos(e.target.value));
 el("btn-nuevo-vehiculo")?.addEventListener("click", () => abrirModalVehiculo(null));
 function abrirModalVehiculo(v) {
+  const msg = el("mensaje-vehiculo"); if (msg) msg.innerHTML = "";
   el("titulo-modal-vehiculo").textContent = v ? "Editar vehículo" : "Nuevo vehículo";
   el("vehiculo-id").value = v ? v.id : "";
   el("vehiculo-cliente").value = v ? v.cliente_id : "";
@@ -384,23 +401,32 @@ function abrirModalVehiculo(v) {
 }
 el("form-vehiculo")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const id = el("vehiculo-id").value;
-  const placaNueva = el("vehiculo-placa").value.trim().toUpperCase();
-  const registro = { cliente_id: el("vehiculo-cliente").value, vin: el("vehiculo-vin").value.trim().toUpperCase() || null, placa: placaNueva, marca: el("vehiculo-marca").value.trim(), modelo: el("vehiculo-modelo").value.trim(), anio: el("vehiculo-anio").value ? Number(el("vehiculo-anio").value) : null, motor: el("vehiculo-motor").value.trim() || null, combustible: el("vehiculo-combustible").value.trim() || null, color: el("vehiculo-color").value.trim() || null, kilometraje_actual: el("vehiculo-km").value ? Number(el("vehiculo-km").value) : null };
-  let error, data;
-  if (id) {
-    const anterior = estado.vehiculos.find(v => v.id === id);
-    ({ data, error } = await sb.from("vehiculos").update(registro).eq("id", id).select().single());
-    if (!error && anterior && (anterior.placa || "") !== placaNueva && placaNueva) await sb.rpc("cambiar_placa", { p_vehiculo_id: id, p_nueva_placa: placaNueva, p_nota: "Cambio desde ficha" });
-    if (!error) await registrarBitacora("vehiculos", id, "actualizar", null, registro);
-  } else {
-    registro.created_by = estado.usuario.id;
-    ({ data, error } = await sb.from("vehiculos").insert(registro).select().single());
-    if (!error) await registrarBitacora("vehiculos", data.id, "crear", null, registro);
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const txtOriginal = btn ? btn.textContent : "Guardar";
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const id = el("vehiculo-id").value;
+    const placaNueva = el("vehiculo-placa").value.trim().toUpperCase();
+    const registro = { cliente_id: el("vehiculo-cliente").value, vin: el("vehiculo-vin").value.trim().toUpperCase() || null, placa: placaNueva, marca: el("vehiculo-marca").value.trim(), modelo: el("vehiculo-modelo").value.trim(), anio: el("vehiculo-anio").value ? Number(el("vehiculo-anio").value) : null, motor: el("vehiculo-motor").value.trim() || null, combustible: el("vehiculo-combustible").value.trim() || null, color: el("vehiculo-color").value.trim() || null, kilometraje_actual: el("vehiculo-km").value ? Number(el("vehiculo-km").value) : null };
+    let error, data;
+    if (id) {
+      const anterior = estado.vehiculos.find(v => v.id === id);
+      ({ data, error } = await sb.from("vehiculos").update(registro).eq("id", id).select().single());
+      if (!error && anterior && (anterior.placa || "") !== placaNueva && placaNueva) await sb.rpc("cambiar_placa", { p_vehiculo_id: id, p_nueva_placa: placaNueva, p_nota: "Cambio desde ficha" });
+      if (!error) await registrarBitacora("vehiculos", id, "actualizar", null, registro);
+    } else {
+      registro.created_by = estado.usuario ? estado.usuario.id : null;
+      ({ data, error } = await sb.from("vehiculos").insert(registro).select().single());
+      if (!error) await registrarBitacora("vehiculos", data.id, "crear", null, registro);
+    }
+    if (error) { mostrarMensaje("mensaje-vehiculo", "Error al guardar: " + error.message, "error"); return; }
+    if (el("cat-manual") && el("cat-manual").checked && registro.marca && registro.modelo && registro.anio) await sb.rpc("agregar_auto_catalogo", { p_anio: registro.anio, p_marca: registro.marca, p_modelo: registro.modelo, p_version: null, p_motor: registro.motor || null });
+    cerrarModal("modal-vehiculo"); await cargarDatosBase(); cargarVehiculos();
+  } catch (e) {
+    mostrarMensaje("mensaje-vehiculo", "Error inesperado: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
   }
-  if (error) { mostrarMensaje("mensaje-vehiculo", "Error al guardar: " + error.message, "error"); return; }
-  if (el("cat-manual") && el("cat-manual").checked && registro.marca && registro.modelo && registro.anio) await sb.rpc("agregar_auto_catalogo", { p_anio: registro.anio, p_marca: registro.marca, p_modelo: registro.modelo, p_version: null, p_motor: registro.motor || null });
-  cerrarModal("modal-vehiculo"); await cargarDatosBase(); cargarVehiculos();
 });
 async function cargarAniosCatalogo() {
   if (!el("cat-anio")) return;
@@ -556,6 +582,7 @@ el("filtro-catalogo-categoria")?.addEventListener("change", () => renderCatalogo
 el("filtro-catalogo-estado")?.addEventListener("change", () => renderCatalogo());
 el("btn-nuevo-servicio")?.addEventListener("click", () => abrirModalServicio(null));
 function abrirModalServicio(s) {
+  const msg = el("mensaje-servicio"); if (msg) msg.innerHTML = "";
   el("titulo-modal-servicio").textContent = s ? "Editar concepto" : "Nuevo concepto";
   el("servicio-id").value = s ? s.codigo : "";
   el("servicio-codigo").value = s ? s.codigo : "";
@@ -570,21 +597,30 @@ function abrirModalServicio(s) {
 el("form-servicio")?.addEventListener("submit", async ev => {
   ev.preventDefault();
   if (!esAdmin()) { mostrarMensaje("mensaje-servicio", "Solo un administrador puede modificar el catálogo.", "error"); return; }
-  const codigoOriginal = el("servicio-id").value || null;
-  const registro = {
-    p_codigo_original: codigoOriginal,
-    p_codigo: el("servicio-codigo").value.trim().toUpperCase(),
-    p_nombre: el("servicio-nombre").value.trim(),
-    p_tipo: el("servicio-tipo") ? el("servicio-tipo").value : "CONCEPTO_SERVICIO",
-    p_categoria_codigo: el("servicio-categoria").value || null,
-    p_activo: el("servicio-estado").value === "activo"
-  };
-  const { data, error } = await sb.rpc("v10_catalogo_guardar", registro);
-  if (error) { mostrarMensaje("mensaje-servicio", "Error al guardar: " + error.message, "error"); return; }
-  await registrarBitacora("catalogo_maestro", null, codigoOriginal ? "actualizar" : "crear", null, registro);
-  cerrarModal("modal-servicio");
-  await cargarDatosBase();
-  cargarCatalogo();
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const txtOriginal = btn ? btn.textContent : "Guardar";
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const codigoOriginal = el("servicio-id").value || null;
+    const registro = {
+      p_codigo_original: codigoOriginal,
+      p_codigo: el("servicio-codigo").value.trim().toUpperCase(),
+      p_nombre: el("servicio-nombre").value.trim(),
+      p_tipo: el("servicio-tipo") ? el("servicio-tipo").value : "CONCEPTO_SERVICIO",
+      p_categoria_codigo: el("servicio-categoria").value || null,
+      p_activo: el("servicio-estado").value === "activo"
+    };
+    const { data, error } = await sb.rpc("v10_catalogo_guardar", registro);
+    if (error) { mostrarMensaje("mensaje-servicio", "Error al guardar: " + error.message, "error"); return; }
+    await registrarBitacora("catalogo_maestro", null, codigoOriginal ? "actualizar" : "crear", null, registro);
+    cerrarModal("modal-servicio");
+    await cargarDatosBase();
+    cargarCatalogo();
+  } catch (e) {
+    mostrarMensaje("mensaje-servicio", "Error inesperado: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 // ============================================================================
 // COTIZACIONES
@@ -794,6 +830,7 @@ el("btn-cat-agregar")?.addEventListener("click", async () => {
 // ============================================================================
 async function abrirCotizacion(id) {
   estado.cotizacionActualId = id;
+  const msg = el("mensaje-cotizacion"); if (msg) msg.innerHTML = "";
   el("titulo-modal-cotizacion").textContent = id ? "Cotización" : "Nueva cotización";
   el("cotizacion-id").value = id || "";
   document.querySelector('.pestana[data-pestana="datos"]')?.click();
@@ -932,6 +969,10 @@ el("cuerpo-adicionales-cot")?.addEventListener("click", (e) => {
 });
 function recalcularConcepto(i) {
   const c = estado.conceptosEnEdicion[i];
+  if (!c) return;
+  c.cantidad = Math.max(1, Math.floor(Number(c.cantidad) || 1));
+  c.precio_unitario = Math.min(999999999.99, Math.max(0, fixFloat(c.precio_unitario || 0)));
+  c.descuento = Math.min(999999999.99, Math.max(0, fixFloat(c.descuento || 0)));
   c.importe = Math.max(0, fixFloat((c.cantidad||0)*(c.precio_unitario||0) - (c.descuento||0)));
   const celda = document.querySelector(`[data-importe-i="${i}"]`);
   if (celda) celda.textContent = "$" + money(c.importe);
@@ -959,6 +1000,10 @@ function validarReglasDeCierre(saldoActual) {
   return null;
 }
 el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
+  const btn = el("btn-guardar-cotizacion");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Guardar cotización";
+
   const modoCli = document.querySelector('input[name="modo-cliente"]:checked').value;
   const modoVeh = document.querySelector('input[name="modo-vehiculo"]:checked').value;
   if (modoCli === "existente" && !seleccion.clienteId) { mostrarMensaje("mensaje-cotizacion", "Selecciona o crea un cliente.", "error"); return; }
@@ -967,64 +1012,46 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
   const marca = el("nveh-manual").checked ? el("nveh-marca-manual").value.trim() : el("nveh-marca").value;
   const modelo = el("nveh-manual").checked ? el("nveh-modelo-manual").value.trim() : el("nveh-modelo").value;
   if (modoVeh === "nuevo" && (!marca || !modelo || !el("nveh-placa").value.trim())) { mostrarMensaje("mensaje-cotizacion", "El auto nuevo requiere marca, modelo y placa.", "error"); return; }
-  const { data: resuelto, error: errR } = await sb.rpc("resolver_cliente_vehiculo", {
-    p_cliente_id: modoCli === "existente" ? seleccion.clienteId : null,
-    p_cli_nombre: el("ncli-nombre").value, p_cli_telefono: el("ncli-telefono").value, p_cli_correo: el("ncli-correo").value, p_cli_rfc: el("ncli-rfc").value, p_cli_direccion: el("ncli-direccion").value, p_cli_obs: el("ncli-obs").value,
-    p_vehiculo_id: modoVeh === "existente" ? seleccion.vehiculoId : null,
-    p_veh_vin: el("nveh-vin").value, p_veh_placa: el("nveh-placa").value, p_veh_marca: marca, p_veh_modelo: modelo, p_veh_anio: el("nveh-anio").value ? Number(el("nveh-anio").value) : null, p_veh_version: el("nveh-version").value, p_veh_motor: el("nveh-motor").value, p_veh_color: el("nveh-color").value, p_veh_km: el("nveh-km").value ? Number(el("nveh-km").value) : null,
-  });
-  if (errR || !resuelto || !resuelto.length) { mostrarMensaje("mensaje-cotizacion", "Error al resolver cliente/vehículo: " + (errR?.message || ""), "error"); return; }
-  const clienteId = resuelto[0].cliente_id;
-  const vehiculoId = resuelto[0].vehiculo_id;
-  if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
-  const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
-  const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
-  const total = Math.max(0, fixFloat(subtotal - descuento));
-  let saldoActual = total;
-  const idExistente = el("cotizacion-id").value;
-  if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
-  const errCierre = validarReglasDeCierre(saldoActual);
-  if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
-  // === Validación de kilometraje sincronizado con el vehículo ===
-  const kmVisitaNum = el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null;
-  if (kmVisitaNum !== null && vehiculoId) {
-    const { data: resKm, error: errKm } = await sb.rpc("validar_y_actualizar_km_vehiculo", {
-      p_vehiculo_id: vehiculoId,
-      p_km_nuevo: kmVisitaNum
+
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const { data: resuelto, error: errR } = await sb.rpc("resolver_cliente_vehiculo", {
+      p_cliente_id: modoCli === "existente" ? seleccion.clienteId : null,
+      p_cli_nombre: el("ncli-nombre").value, p_cli_telefono: el("ncli-telefono").value, p_cli_correo: el("ncli-correo").value, p_cli_rfc: el("ncli-rfc").value, p_cli_direccion: el("ncli-direccion").value, p_cli_obs: el("ncli-obs").value,
+      p_vehiculo_id: modoVeh === "existente" ? seleccion.vehiculoId : null,
+      p_veh_vin: el("nveh-vin").value, p_veh_placa: el("nveh-placa").value, p_veh_marca: marca, p_veh_modelo: modelo, p_veh_anio: el("nveh-anio").value ? Number(el("nveh-anio").value) : null, p_veh_version: el("nveh-version").value, p_veh_motor: el("nveh-motor").value, p_veh_color: el("nveh-color").value, p_veh_km: el("nveh-km").value ? Number(el("nveh-km").value) : null,
     });
-    if (errKm) {
-      mostrarMensaje("mensaje-cotizacion", "Error al validar kilometraje: " + errKm.message, "error");
-      return;
+    if (errR || !resuelto || !resuelto.length) { mostrarMensaje("mensaje-cotizacion", "Error al resolver cliente/vehículo: " + (errR?.message || ""), "error"); return; }
+    const clienteId = resuelto[0].cliente_id;
+    const vehiculoId = resuelto[0].vehiculo_id;
+    if (modoVeh === "nuevo" && el("nveh-manual").checked && el("nveh-anio").value) await sb.rpc("agregar_auto_catalogo", { p_anio: Number(el("nveh-anio").value), p_marca: marca, p_modelo: modelo, p_version: el("nveh-version").value || null, p_motor: el("nveh-motor").value || null });
+    const subtotal = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.cantidad||0)*(c.precio_unitario||0)),0);
+    const descuento = estado.conceptosEnEdicion.reduce((s,c)=>fixFloat(s + (c.descuento||0)),0);
+    const total = Math.max(0, fixFloat(subtotal - descuento));
+    let saldoActual = total;
+    const idExistente = el("cotizacion-id").value;
+    if (idExistente) { const { data: pv } = await sb.from("pagos").select("importe").eq("cotizacion_id", idExistente).eq("estado","valido"); saldoActual = Math.max(0, fixFloat(total - (pv||[]).reduce((s,p)=>fixFloat(s + Number(p.importe)),0))); }
+    const errCierre = validarReglasDeCierre(saldoActual);
+    if (errCierre) { mostrarMensaje("mensaje-cotizacion", errCierre, "error"); return; }
+    const kmVisitaNum = el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null;
+    if (kmVisitaNum !== null && vehiculoId) {
+      const { data: resKm, error: errKm } = await sb.rpc("validar_y_actualizar_km_vehiculo", {
+        p_vehiculo_id: vehiculoId,
+        p_km_nuevo: kmVisitaNum
+      });
+      if (errKm) {
+        mostrarMensaje("mensaje-cotizacion", "Error al validar kilometraje: " + errKm.message, "error");
+        return;
+      }
+      if (resKm && resKm.ok === false) {
+        mostrarMensaje("mensaje-cotizacion", resKm.motivo || "El kilometraje capturado no es válido.", "error");
+        return;
+      }
     }
-    if (resKm && resKm.ok === false) {
-      mostrarMensaje("mensaje-cotizacion", resKm.motivo || "El kilometraje capturado no es válido.", "error");
-      return;
-    }
-  }
-  const conAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
-  const encabezado = { cliente_id: clienteId, vehiculo_id: vehiculoId, entrega_estimada: el("cotizacion-entrega").value || null, kilometraje_visita: el("cotizacion-km").value ? Number(el("cotizacion-km").value) : null, observaciones: el("cotizacion-observaciones").value.trim() || null, estado_comercial: el("cotizacion-estado-comercial").value, estado_servicio: el("cotizacion-estado-servicio").value, estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"), subtotal, descuento_total: descuento, total, notas_finales: el("cotizacion-notas-finales").value.trim() || null, cerrada_con_adeudo: conAdeudo, motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null, fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null };
-  let id = el("cotizacion-id").value;
-  if (!id) {
-    const { data: folio } = await sb.rpc("siguiente_folio");
-    encabezado.folio = folio; encabezado.usuario_responsable = estado.usuario.id; encabezado.created_by = estado.usuario.id;
-    const { data, error } = await sb.from("cotizaciones").insert(encabezado).select().single();
-    if (error) { mostrarMensaje("mensaje-cotizacion", "Error al crear: " + error.message, "error"); return; }
-    id = data.id; el("cotizacion-id").value = id; el("titulo-modal-cotizacion").textContent = data.folio || "Cotización";
-    await registrarBitacora("cotizaciones", id, "crear", null, encabezado);
-  } else {
-    const { error } = await sb.from("cotizaciones").update(encabezado).eq("id", id);
-    if (error) { mostrarMensaje("mensaje-cotizacion", "Error al actualizar: " + error.message, "error"); return; }
-    await registrarBitacora("cotizaciones", id, "actualizar", null, encabezado);
-  }
-  await sb.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
-  if (estado.conceptosEnEdicion.length) {
-    // === V11.7: al guardar, se limpia el texto de los adicionales (por si
-    // quedó algo con el emoji viejo) y se persiste el marcador "codigo=ADICIONAL"
-    // para poder identificarlos de forma confiable la próxima vez que se abra.
-    const filas = estado.conceptosEnEdicion.map(c => {
+    const conAdeudo = el("cotizacion-cerrar-adeudo").checked && el("cotizacion-estado-comercial").value === "cerrada";
+    const conceptosPayload = estado.conceptosEnEdicion.map(c => {
       const esAdic = esAdicionalConcepto(c);
       return {
-        cotizacion_id: id,
         tipo: c.tipo,
         descripcion: esAdic ? descripcionLimpiaAdicional(c.descripcion) : c.descripcion,
         cantidad: c.cantidad || 1,
@@ -1034,11 +1061,63 @@ el("btn-guardar-cotizacion")?.addEventListener("click", async () => {
         codigo: esAdic ? "ADICIONAL" : null
       };
     });
-    await sb.from("detalle_cotizacion").insert(filas);
+
+    let id = idExistente || null;
+    // Try RPC function first for atomic transaction save
+    const { data: rpcRes, error: rpcErr } = await sb.rpc("guardar_cotizacion_completa", {
+      p_cotizacion_id: id,
+      p_cliente_id: clienteId,
+      p_vehiculo_id: vehiculoId,
+      p_entrega_estimada: el("cotizacion-entrega").value || null,
+      p_kilometraje_visita: kmVisitaNum,
+      p_observaciones: el("cotizacion-observaciones").value.trim() || null,
+      p_estado_comercial: el("cotizacion-estado-comercial").value,
+      p_estado_servicio: el("cotizacion-estado-servicio").value,
+      p_estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"),
+      p_subtotal: subtotal,
+      p_descuento_total: descuento,
+      p_total: total,
+      p_notas_finales: el("cotizacion-notas-finales").value.trim() || null,
+      p_cerrada_con_adeudo: conAdeudo,
+      p_motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null,
+      p_fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null,
+      p_conceptos: conceptosPayload
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.length) {
+      id = rpcRes[0].id;
+      el("cotizacion-id").value = id;
+      el("titulo-modal-cotizacion").textContent = rpcRes[0].folio || "Cotización";
+      await registrarBitacora("cotizaciones", id, idExistente ? "actualizar" : "crear", null, { total, clienteId, vehiculoId });
+    } else {
+      // Fallback to client multi-statement if RPC is not deployed
+      const encabezado = { cliente_id: clienteId, vehiculo_id: vehiculoId, entrega_estimada: el("cotizacion-entrega").value || null, kilometraje_visita: kmVisitaNum, observaciones: el("cotizacion-observaciones").value.trim() || null, estado_comercial: el("cotizacion-estado-comercial").value, estado_servicio: el("cotizacion-estado-servicio").value, estado_pago: saldoActual <= 0 && total > 0 ? "pagada" : (saldoActual < total ? "parcialmente_pagada" : "sin_pago"), subtotal, descuento_total: descuento, total, notas_finales: el("cotizacion-notas-finales").value.trim() || null, cerrada_con_adeudo: conAdeudo, motivo_adeudo: conAdeudo ? el("cotizacion-motivo-adeudo").value.trim() : null, fecha_compromiso_pago: conAdeudo ? el("cotizacion-fecha-compromiso").value : null };
+      if (!id) {
+        const { data: folio } = await sb.rpc("siguiente_folio");
+        encabezado.folio = folio; encabezado.usuario_responsable = estado.usuario ? estado.usuario.id : null; encabezado.created_by = estado.usuario ? estado.usuario.id : null;
+        const { data, error } = await sb.from("cotizaciones").insert(encabezado).select().single();
+        if (error) { mostrarMensaje("mensaje-cotizacion", "Error al crear: " + error.message, "error"); return; }
+        id = data.id; el("cotizacion-id").value = id; el("titulo-modal-cotizacion").textContent = data.folio || "Cotización";
+        await registrarBitacora("cotizaciones", id, "crear", null, encabezado);
+      } else {
+        const { error } = await sb.from("cotizaciones").update(encabezado).eq("id", id);
+        if (error) { mostrarMensaje("mensaje-cotizacion", "Error al actualizar: " + error.message, "error"); return; }
+        await registrarBitacora("cotizaciones", id, "actualizar", null, encabezado);
+      }
+      await sb.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
+      if (conceptosPayload.length) {
+        const filas = conceptosPayload.map(c => ({ cotizacion_id: id, ...c }));
+        await sb.from("detalle_cotizacion").insert(filas);
+      }
+    }
+    actualizarGatePagos();
+    mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
+    await cargarDatosBase(); await cargarCotizaciones();
+  } catch (e) {
+    mostrarMensaje("mensaje-cotizacion", "Error inesperado al guardar cotización: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
   }
-  actualizarGatePagos();
-  mostrarMensaje("mensaje-cotizacion", "Cotización guardada correctamente. Ya puedes registrar pagos, seguimiento y archivos.");
-  await cargarDatosBase(); await cargarCotizaciones();
 });
 // --- Pagos ---
 async function cargarPagosCotizacion(cotizacionId) {
@@ -1051,15 +1130,25 @@ async function cargarPagosCotizacion(cotizacionId) {
   document.querySelectorAll("[data-reversar]").forEach(b => b.addEventListener("click", async () => { const motivo = prompt("Motivo de la reversión (obligatorio):"); if (!motivo) return; await sb.from("pagos").update({ estado:"reversado" }).eq("id", b.dataset.reversar); await registrarBitacora("pagos", b.dataset.reversar, "reversar", null, { motivo }); cargarPagosCotizacion(cotizacionId); }));
 }
 el("btn-agregar-pago")?.addEventListener("click", async () => {
-  const id = el("cotizacion-id").value;
-  if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de registrar pagos.", "error"); return; }
-  const importe = fixFloat(el("pago-importe").value || 0); if (importe <= 0) return;
-  const registro = { cotizacion_id: id, importe, metodo: el("pago-metodo").value, referencia: el("pago-referencia").value.trim()||null, comentario: el("pago-comentario").value.trim()||null, usuario_id: estado.usuario.id };
-  const { data, error } = await sb.from("pagos").insert(registro).select().single();
-  if (error) { alert("Error al registrar pago: " + error.message); return; }
-  await registrarBitacora("pagos", data.id, "crear", null, registro);
-  el("pago-importe").value=""; el("pago-referencia").value=""; el("pago-comentario").value="";
-  cargarPagosCotizacion(id);
+  const btn = el("btn-agregar-pago");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Agregar pago";
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const id = el("cotizacion-id").value;
+    if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de registrar pagos.", "error"); return; }
+    const importe = fixFloat(el("pago-importe").value || 0); if (importe <= 0) return;
+    const registro = { cotizacion_id: id, importe, metodo: el("pago-metodo").value, referencia: el("pago-referencia").value.trim()||null, comentario: el("pago-comentario").value.trim()||null, usuario_id: estado.usuario ? estado.usuario.id : null };
+    const { data, error } = await sb.from("pagos").insert(registro).select().single();
+    if (error) { alert("Error al registrar pago: " + error.message); return; }
+    await registrarBitacora("pagos", data.id, "crear", null, registro);
+    el("pago-importe").value=""; el("pago-referencia").value=""; el("pago-comentario").value="";
+    await cargarPagosCotizacion(id);
+  } catch (e) {
+    alert("Error al registrar pago: " + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 // --- Seguimiento ---
 async function cargarSeguimientoCotizacion(cotizacionId) {
@@ -1067,11 +1156,22 @@ async function cargarSeguimientoCotizacion(cotizacionId) {
   el("lista-seguimiento").innerHTML = (data||[]).map(s => `<li>${escHtml(s.descripcion)}<br><small>${new Date(s.created_at).toLocaleString("es-MX")}</small></li>`).join("") || `<li>Sin movimientos registrados.</li>`;
 }
 el("btn-agregar-seguimiento")?.addEventListener("click", async () => {
-  const id = el("cotizacion-id").value; const texto = el("seguimiento-texto").value.trim();
-  if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de agregar seguimiento.", "error"); return; }
-  if (!texto) return;
-  await sb.from("seguimientos").insert({ cotizacion_id: id, descripcion: texto, usuario_id: estado.usuario.id, tipo: "nota" });
-  el("seguimiento-texto").value = ""; cargarSeguimientoCotizacion(id);
+  const btn = el("btn-agregar-seguimiento");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Agregar al seguimiento";
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+  try {
+    const id = el("cotizacion-id").value; const texto = el("seguimiento-texto").value.trim();
+    if (!id) { mostrarMensaje("mensaje-cotizacion", "Guarda la cotización antes de agregar seguimiento.", "error"); return; }
+    if (!texto) return;
+    const { error } = await sb.from("seguimientos").insert({ cotizacion_id: id, descripcion: texto, usuario_id: estado.usuario ? estado.usuario.id : null, tipo: "nota" });
+    if (error) { alert("Error al agregar seguimiento: " + error.message); return; }
+    el("seguimiento-texto").value = ""; await cargarSeguimientoCotizacion(id);
+  } catch (e) {
+    alert("Error al agregar seguimiento: " + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 // ============================================================================
 // IMPORTACIÓN MASIVA DEL CATÁLOGO MAESTRO V10 (CSV)
@@ -1127,19 +1227,29 @@ async function cargarArchivosCotizacion(cotizacionId) {
   el("galeria-archivos").innerHTML = lista.length ? lista.map(a => { const url = sb.storage.from("evidencias").getPublicUrl(a.storage_path).data.publicUrl; const esImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(a.nombre_archivo); return `<a href="${url}" target="_blank" class="archivo-item">${esImg?`<img src="${url}" alt="${a.nombre_archivo}">`:`<div class="archivo-generico">Archivo</div>`}<small>${a.tipo||"otro"}</small><small>${a.nombre_archivo}</small></a>`; }).join("") : `<div class="vacio-tabla">Sin archivos todavía.</div>`;
 }
 el("btn-subir-archivo")?.addEventListener("click", async () => {
-  const id = el("cotizacion-id").value;
-  if (!id) { mostrarMensaje("mensaje-archivo", "Guarda la cotización antes de subir archivos.", "error"); return; }
-  const archivo = el("archivo-input").files[0];
-  if (!archivo) { mostrarMensaje("mensaje-archivo", "Selecciona un archivo primero.", "error"); return; }
-  const ruta = `${id}/${Date.now()}_${archivo.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const { error: errS } = await sb.storage.from("evidencias").upload(ruta, archivo);
-  if (errS) { mostrarMensaje("mensaje-archivo", "Error al subir: " + errS.message, "error"); return; }
-  const registro = { cotizacion_id: id, tipo: el("archivo-tipo").value, nombre_archivo: archivo.name, storage_path: ruta, usuario_id: estado.usuario.id };
-  const { data, error } = await sb.from("archivos_adjuntos").insert(registro).select().single();
-  if (error) { mostrarMensaje("mensaje-archivo", "Subido pero no registrado: " + error.message, "error"); return; }
-  await registrarBitacora("archivos_adjuntos", data.id, "crear", null, registro);
-  el("archivo-input").value = ""; mostrarMensaje("mensaje-archivo", "Archivo subido correctamente.");
-  cargarArchivosCotizacion(id);
+  const btn = el("btn-subir-archivo");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Subir archivo";
+  if (btn) { btn.disabled = true; btn.textContent = "Subiendo..."; }
+  try {
+    const id = el("cotizacion-id").value;
+    if (!id) { mostrarMensaje("mensaje-archivo", "Guarda la cotización antes de subir archivos.", "error"); return; }
+    const archivo = el("archivo-input").files[0];
+    if (!archivo) { mostrarMensaje("mensaje-archivo", "Selecciona un archivo primero.", "error"); return; }
+    const ruta = `${id}/${Date.now()}_${archivo.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+    const { error: errS } = await sb.storage.from("evidencias").upload(ruta, archivo);
+    if (errS) { mostrarMensaje("mensaje-archivo", "Error al subir: " + errS.message, "error"); return; }
+    const registro = { cotizacion_id: id, tipo: el("archivo-tipo").value, nombre_archivo: archivo.name, storage_path: ruta, usuario_id: estado.usuario ? estado.usuario.id : null };
+    const { data, error } = await sb.from("archivos_adjuntos").insert(registro).select().single();
+    if (error) { mostrarMensaje("mensaje-archivo", "Subido pero no registrado: " + error.message, "error"); return; }
+    await registrarBitacora("archivos_adjuntos", data.id, "crear", null, registro);
+    el("archivo-input").value = ""; mostrarMensaje("mensaje-archivo", "Archivo subido correctamente.");
+    await cargarArchivosCotizacion(id);
+  } catch (e) {
+    mostrarMensaje("mensaje-archivo", "Error inesperado al subir archivo: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 // ============================================================================
 // PDF DE COTIZACIÓN
@@ -1442,17 +1552,28 @@ el("btn-guardar-usuario")?.addEventListener("click", async () => {
   cerrarModal("modal-usuario"); await cargarUsuarios(); await cargarDatosBase();
 });
 el("btn-reset-password")?.addEventListener("click", async () => {
+  const btn = el("btn-reset-password");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Restablecer";
   const id = el("usuario-id").value;
   const password = el("usuario-password").value;
   if (!id) { mostrarMensaje("mensaje-usuario", "Primero abre el perfil de un usuario.", "error"); return; }
-  if (!password || password.length < 6) { mostrarMensaje("mensaje-usuario", "La contraseña debe tener al menos 6 caracteres.", "error"); return; }
-  mostrarMensaje("mensaje-usuario", "Actualizando contraseña…");
-  const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "cambiar_password", usuario_id: id, password } });
-  if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-usuario", "Error: " + d, "error"); return; }
-  if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
-  await registrarBitacora("perfiles", id, "cambiar_password", null, { por: estado.usuario.id });
-  el("usuario-password").value = "";
-  mostrarMensaje("mensaje-usuario", "Contraseña actualizada correctamente.");
+  const passValido = evaluarPassword(password, { len: "req-edit-len", min: "req-edit-min", may: "req-edit-may", num: "req-edit-num" });
+  if (!passValido) { mostrarMensaje("mensaje-usuario", "La contraseña no cumple con los requisitos mínimos (8+ caracteres, mayúscula, minúscula, número).", "error"); return; }
+  if (btn) { btn.disabled = true; btn.textContent = "Restableciendo..."; }
+  try {
+    mostrarMensaje("mensaje-usuario", "Actualizando contraseña…");
+    const { data, error } = await sb.functions.invoke("gestion-usuario", { body: { accion: "cambiar_password", usuario_id: id, password } });
+    if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-usuario", "Error: " + d, "error"); return; }
+    if (data && data.ok === false) { mostrarMensaje("mensaje-usuario", "Error: " + data.mensaje, "error"); return; }
+    await registrarBitacora("perfiles", id, "cambiar_password", null, { por: estado.usuario ? estado.usuario.id : null });
+    el("usuario-password").value = "";
+    mostrarMensaje("mensaje-usuario", "Contraseña actualizada correctamente.");
+  } catch (e) {
+    mostrarMensaje("mensaje-usuario", "Error inesperado: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 el("btn-eliminar-usuario")?.addEventListener("click", async () => {
   const id = el("usuario-id").value;
@@ -1500,23 +1621,34 @@ el("nuevo-username")?.addEventListener("input", async () => {
   es.innerHTML = disp ? `<span style="color:var(--green);">✓ Disponible</span>` : `<span style="color:var(--red);">✗ Ya está en uso.</span>`;
 });
 el("btn-confirmar-crear-usuario")?.addEventListener("click", async () => {
+  const btn = el("btn-confirmar-crear-usuario");
+  if (btn?.disabled) return;
+  const txtOriginal = btn ? btn.textContent : "Crear usuario";
   const nombre = el("nuevo-nombre").value.trim();
   const username = el("nuevo-username").value.trim().toLowerCase();
   const correo = el("nuevo-correo").value.trim().toLowerCase();
   const password = el("nuevo-password").value;
   const rol = el("nuevo-rol").value;
   if (!nombre || !username || !correo || !password) { mostrarMensaje("mensaje-crear-usuario", "Todos los campos son obligatorios.", "error"); return; }
-  if (password.length < 6) { mostrarMensaje("mensaje-crear-usuario", "La contraseña debe tener al menos 6 caracteres.", "error"); return; }
+  const passValido = evaluarPassword(password, { len: "req-crear-len", min: "req-crear-min", may: "req-crear-may", num: "req-crear-num" });
+  if (!passValido) { mostrarMensaje("mensaje-crear-usuario", "La contraseña no cumple con los requisitos mínimos (8+ caracteres, mayúscula, minúscula, número).", "error"); return; }
   if (!/^[a-z0-9_]+$/.test(username)) { mostrarMensaje("mensaje-crear-usuario", "Usuario: solo minúsculas, números y guión bajo.", "error"); return; }
-  const { data: disp } = await sb.rpc("username_disponible", { p_username: username });
-  if (!disp) { mostrarMensaje("mensaje-crear-usuario", "Ese usuario ya está en uso.", "error"); return; }
-  mostrarMensaje("mensaje-crear-usuario", "Creando usuario…");
-  const { data, error } = await sb.functions.invoke("crear-usuario", { body: { correo, password, nombre_completo: nombre, username, rol } });
-  if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-crear-usuario", "Error: " + d, "error"); return; }
-  if (data && (data.error || data.ok === false)) { mostrarMensaje("mensaje-crear-usuario", "Error: " + (data.error || data.mensaje), "error"); return; }
-  await registrarBitacora("perfiles", data.id, "crear_usuario", null, { username, rol });
-  mostrarMensaje("mensaje-crear-usuario", `Usuario @${username} creado correctamente.`);
-  cerrarModal("modal-crear-usuario"); await cargarUsuarios();
+  if (btn) { btn.disabled = true; btn.textContent = "Creando..."; }
+  try {
+    const { data: disp } = await sb.rpc("username_disponible", { p_username: username });
+    if (!disp) { mostrarMensaje("mensaje-crear-usuario", "Ese usuario ya está en uso.", "error"); return; }
+    mostrarMensaje("mensaje-crear-usuario", "Creando usuario…");
+    const { data, error } = await sb.functions.invoke("crear-usuario", { body: { correo, password, nombre_completo: nombre, username, rol } });
+    if (error) { let d = error.message; try { if (error.context && typeof error.context.json === "function") { const c = await error.context.json(); d = c.mensaje || c.error || d; } } catch(_){} mostrarMensaje("mensaje-crear-usuario", "Error: " + d, "error"); return; }
+    if (data && (data.error || data.ok === false)) { mostrarMensaje("mensaje-crear-usuario", "Error: " + (data.error || data.mensaje), "error"); return; }
+    await registrarBitacora("perfiles", data.id, "crear_usuario", null, { username, rol });
+    mostrarMensaje("mensaje-crear-usuario", `Usuario @${username} creado correctamente.`);
+    cerrarModal("modal-crear-usuario"); await cargarUsuarios();
+  } catch (e) {
+    mostrarMensaje("mensaje-crear-usuario", "Error inesperado: " + (e.message || e), "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = txtOriginal; }
+  }
 });
 // ============================================================================
 // BITÁCORA
